@@ -536,9 +536,9 @@ button {
 
 /* Pattern background for cells in edit mode */
 .grid-table tbody td.selected.edit-mode {
-  background-color: rgba(200, 200, 200, 0.3) !important;
-  background-image: repeating-linear-gradient(-45deg, rgba(255,255,255, 0.25), rgba(255,255,255, 0.25) 1px, transparent 1px, transparent 6px) !important;
-  background-size: 4px 4px !important;
+  /* No pattern background in edit mode - just keep the default cell background */
+  background-color: transparent !important;
+  background-image: none !important;
 }
 
 /* Calm, tranquil pulse animation for single cell - uniform glow all around */
@@ -819,10 +819,10 @@ button {
   align-items: center;
   padding: 2px 8px;
   background: var(--hover);
-  border: 0.5px solid var(--border-thin);
+  border: 0.5px solid #569CD6; /* Same blue as selector border */
   border-radius: 12px;
   font-size: 11px;
-  color: var(--text);
+  color: #569CD6; /* Same blue as selector border */
   font-family: "Consolas", "Courier New", monospace;
   min-height: 20px;
 }
@@ -851,14 +851,14 @@ button {
   flex-shrink: 1;
   visibility: visible !important;
   opacity: 1 !important;
-  transition: background-color 0.3s ease;
+  /* No transition - instant background change */
 }
 
 /* Monaco editor text opacity - 30% in selection mode (only text, not background) */
 /* Target only the spans containing text, not the line containers */
 .editor-wrapper .monaco-editor .view-line span {
   opacity: 0.3;
-  transition: opacity 0.3s ease;
+  /* No transition - instant opacity change */
 }
 
 .editor-wrapper.editor-edit-mode {

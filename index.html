@@ -425,7 +425,7 @@
                     minimap: { enabled: false },
                     scrollBeyondLastLine: false,
                     readOnly: true,
-                    wordWrap: "on",
+                    wordWrap: "off", // Disable word wrap - use horizontal scrolling instead
                     lineHeight: 1.5,
                     tabSize: 4,
                     insertSpaces: true, // Use spaces instead of tab characters
@@ -995,7 +995,60 @@
                         if (!formulaText) return { markers: [] };
                         
                         // Check for common syntax errors
-                        // 1. Check for periods in function arguments (should be commas)
+                        // 1. Check for unclosed string quotes
+                        let inString = false;
+                        let escaped = false;
+                        let unclosedQuoteIndex = -1;
+                        let unclosedQuoteLine = -1;
+                        let unclosedQuoteColumn = -1;
+                        
+                        for (let i = 0; i < formulaText.length; i++) {
+                          const char = formulaText[i];
+                          
+                          if (escaped) {
+                            escaped = false;
+                            continue;
+                          }
+                          
+                          if (char === '\\') {
+                            escaped = true;
+                            continue;
+                          }
+                          
+                          if (char === '"') {
+                            if (!inString) {
+                              // Opening quote - track its position (this will be overwritten if we close and open again)
+                              unclosedQuoteIndex = i;
+                              const beforeQuote = formulaText.substring(0, i);
+                              const quoteLines = beforeQuote.split('\n');
+                              unclosedQuoteLine = quoteLines.length - 1;
+                              unclosedQuoteColumn = quoteLines[unclosedQuoteLine].length;
+                            }
+                            inString = !inString;
+                          }
+                        }
+                        
+                        // If we're still in a string at the end, there's an unclosed quote
+                        if (inString && unclosedQuoteIndex !== -1) {
+                          // Find the end position (end of formula)
+                          const endLines = formulaText.split('\n');
+                          const endLineIndex = endLines.length - 1;
+                          const endEditorLine = endLineIndex + 1;
+                          const endColumn = endLines[endLineIndex].length + 1;
+                          
+                          diagnostics.push({
+                            severity: monaco.MarkerSeverity.Error,
+                            startLineNumber: unclosedQuoteLine + 1, // +1 for 1-based line numbers
+                            startColumn: unclosedQuoteColumn + 1, // +1 for 1-based columns
+                            endLineNumber: endEditorLine,
+                            endColumn: endColumn,
+                            message: 'Unclosed string - missing closing quote (")',
+                            source: 'Formula Validator',
+                            code: 'UNCLOSED_STRING'
+                          });
+                        }
+                        
+                        // 2. Check for periods in function arguments (should be commas)
                         // Need to check if we're in a function context and if parentheses are closed
                         const openParens = (formulaText.match(/\(/g) || []).length;
                         const closeParens = (formulaText.match(/\)/g) || []).length;
@@ -2156,6 +2209,17 @@
                   const editorDomNode = editor.getDomNode();
                   if (editorDomNode) {
                     editorDomNode.addEventListener('click', (e) => {
+                      // If already in edit mode, Monaco Editor handles clicks automatically to position cursor
+                      // We don't need to interfere - just ensure the editor is not read-only
+                      if (isEditMode) {
+                        // Ensure editor is editable (Monaco will handle cursor positioning automatically)
+                        if (editor.getOption(monaco.editor.EditorOption.readOnly)) {
+                          editor.updateOptions({ readOnly: false });
+                        }
+                        // Monaco Editor automatically positions cursor on click when not read-only
+                        return;
+                      }
+                      
                       // Only enter edit mode if a cell is selected
                       if (window.selectedCell && !isEditMode) {
                         // Get click position before entering edit mode
@@ -3108,7 +3172,8 @@
               window.gridColumnResizing = {
                 current: null,
                 handleMouseMove: null,
-                handleMouseUp: null
+                handleMouseUp: null,
+                justResized: false // Flag to prevent selection after resize
               };
             }
             
@@ -3146,9 +3211,13 @@
               
               // Allow column headers to be selected (but not visually highlighted)
               th.addEventListener("click", (e) => {
-                // Only select if not resizing
-                if (!window.gridColumnResizing.current) {
+                // Only select if not resizing and resize didn't just happen
+                if (!window.gridColumnResizing.current && !window.gridColumnResizing.justResized) {
                   selectCell(th);
+                } else if (window.gridColumnResizing.justResized) {
+                  // Prevent selection if we just resized
+                  e.preventDefault();
+                  e.stopPropagation();
                 }
               });
               
@@ -3194,6 +3263,11 @@
                         allCells[i].style.width = widthStr;
                         allCells[i].style.minWidth = widthStr;
                       }
+                      
+                      // Update selection overlay to match new cell sizes (if there's a selection)
+                      if (typeof updateSelectionOverlay === 'function') {
+                        updateSelectionOverlay();
+                      }
                     }
                     window.gridColumnResizing.rafId = null;
                   });
@@ -3207,6 +3281,12 @@
                     cancelAnimationFrame(window.gridColumnResizing.rafId);
                     window.gridColumnResizing.rafId = null;
                   }
+                  // Set flag to prevent click from selecting
+                  window.gridColumnResizing.justResized = true;
+                  // Clear flag after a short delay to allow normal clicking later
+                  setTimeout(() => {
+                    window.gridColumnResizing.justResized = false;
+                  }, 100);
                   window.gridColumnResizing.current = null;
                   document.body.style.cursor = "";
                   document.body.style.userSelect = "";
@@ -3222,7 +3302,8 @@
               window.gridRowResizing = {
                 current: null,
                 handleMouseMove: null,
-                handleMouseUp: null
+                handleMouseUp: null,
+                justResized: false // Flag to prevent selection after resize
               };
             }
 
@@ -3254,6 +3335,11 @@
                         allCells[i].style.height = heightStr;
                         allCells[i].style.minHeight = heightStr;
                       }
+                      
+                      // Update selection overlay to match new cell sizes (if there's a selection)
+                      if (typeof updateSelectionOverlay === 'function') {
+                        updateSelectionOverlay();
+                      }
                     }
                     window.gridRowResizing.rafId = null;
                   });
@@ -3267,6 +3353,12 @@
                     cancelAnimationFrame(window.gridRowResizing.rafId);
                     window.gridRowResizing.rafId = null;
                   }
+                  // Set flag to prevent click from selecting
+                  window.gridRowResizing.justResized = true;
+                  // Clear flag after a short delay to allow normal clicking later
+                  setTimeout(() => {
+                    window.gridRowResizing.justResized = false;
+                  }, 100);
                   window.gridRowResizing.current = null;
                   document.body.style.cursor = "";
                   document.body.style.userSelect = "";
@@ -3324,8 +3416,15 @@
               });
               
               // Allow row headers to be selected (but not visually highlighted)
-              indexCell.addEventListener("click", () => {
-                selectCell(indexCell);
+              indexCell.addEventListener("click", (e) => {
+                // Only select if not resizing and resize didn't just happen
+                if (!window.gridRowResizing.current && !window.gridRowResizing.justResized) {
+                  selectCell(indexCell);
+                } else if (window.gridRowResizing.justResized) {
+                  // Prevent selection if we just resized
+                  e.preventDefault();
+                  e.stopPropagation();
+                }
               });
               
               rowElement.appendChild(indexCell);
