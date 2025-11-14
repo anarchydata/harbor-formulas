@@ -513,23 +513,8 @@
                   window.isProgrammaticCursorChange = false;
                   window.cursorPositionListener = null;
                   
-                  // Prevent cursor from being on line 1
-                  window.cursorPositionListener = editor.onDidChangeCursorPosition((e) => {
-                    // Skip if this is a programmatic change
-                    if (window.isProgrammaticCursorChange) {
-                      // Don't reset flag here - let it be reset after cursor is set
-                      return;
-                    }
-                    
-                    // No longer need to prevent line 1 - it's now a valid line
-                  });
-                  
-                  // No longer need to prevent selection on line 1 - it's now a valid line
-                  editor.onDidChangeCursorSelection((e) => {
-                    // Line 1 is now valid, so no special handling needed
-                  });
-                  
-                  // Line 1 is now a valid line, so no need to prevent editing on it
+                  // Line 1 is now a valid line - no restrictions needed
+                  // Removed old cursor position listener that was preventing line 1 interaction
                   
                   // Set initial cursor position to line 1
                   editor.setPosition({ lineNumber: 1, column: 1 });
@@ -1064,7 +1049,137 @@
                           });
                         }
                         
-                        // 2. Check for periods in function arguments (should be commas)
+                        // 2. Check for disconnected expressions (on same line or across lines)
+                        // Expressions must be connected by operators or ampersand
+                        
+                        // Remove comments for this check (keep line structure)
+                        const linesWithoutComments = lines.map(line => {
+                          // Find // that's not inside a string
+                          let inString = false;
+                          let escaped = false;
+                          let commentIndex = -1;
+                          
+                          for (let i = 0; i < line.length - 1; i++) {
+                            if (escaped) {
+                              escaped = false;
+                              continue;
+                            }
+                            if (line[i] === '\\') {
+                              escaped = true;
+                              continue;
+                            }
+                            if (line[i] === '"') {
+                              inString = !inString;
+                              continue;
+                            }
+                            if (!inString && line[i] === '/' && line[i + 1] === '/') {
+                              commentIndex = i;
+                              break;
+                            }
+                          }
+                          return commentIndex >= 0 ? line.substring(0, commentIndex) : line;
+                        });
+                        
+                        // Process each line to find disconnected expressions on the same line
+                        for (let lineIndex = 0; lineIndex < linesWithoutComments.length; lineIndex++) {
+                          const line = linesWithoutComments[lineIndex];
+                          if (!line || !line.trim()) continue; // Skip empty lines
+                          
+                          // Find: end of expression -> whitespace -> start of expression
+                          // Pattern: expression end (string, paren, number, cell, identifier) -> whitespace -> expression start
+                          // Without operator between
+                          
+                          // Pattern 1: String literal followed by whitespace and another expression (not operator)
+                          // Example: "Jordan " 1+1
+                          const stringDisconnect = /"([^"\\]|\\.)*"\s+(?![+\-*/&^=<>(),])(?=("|\d+|[A-Z]+\$?\d+\$?|[A-Za-z_][A-Za-z0-9_]*\s*\())/g;
+                          let match;
+                          
+                          while ((match = stringDisconnect.exec(line)) !== null) {
+                            // Check if what comes before ends with an operator
+                            const before = line.substring(0, match.index);
+                            const endsWithOp = /(<=|>=|<>|[+\-*/&^=<>])\s*$/.test(before);
+                            
+                            if (!endsWithOp) {
+                              // Found disconnected expression
+                              const whitespaceMatch = match[0].match(/\s+$/);
+                              const whitespaceLength = whitespaceMatch ? whitespaceMatch[0].length : 0;
+                              const errorStart = match.index + match[0].length - whitespaceLength;
+                              const errorEnd = match.index + match[0].length;
+                              
+                              diagnostics.push({
+                                severity: monaco.MarkerSeverity.Error,
+                                startLineNumber: lineIndex + 1,
+                                startColumn: errorStart + 1,
+                                endLineNumber: lineIndex + 1,
+                                endColumn: errorEnd + 1,
+                                message: 'Disconnected expression - expressions must be connected by operators (+, -, *, /, etc.) or ampersand (&) for text concatenation',
+                                source: 'Formula Validator',
+                                code: 'DISCONNECTED_EXPRESSION'
+                              });
+                              break; // Only report first error per line
+                            }
+                          }
+                          
+                          // Pattern 2: Number, cell reference, identifier, or closing paren followed by whitespace and another expression
+                          // Example: IF(...) 1+1, 10 20, A1 B1
+                          const expressionDisconnect = /(\)|"([^"\\]|\\.)*"|\b\d+\.?\d*|\b[A-Z]+\$?\d+\$?|\b[A-Za-z_][A-Za-z0-9_]*)\s+(?![+\-*/&^=<>(),])(?=("|\d+|[A-Z]+\$?\d+\$?|[A-Za-z_][A-Za-z0-9_]*\s*\())/g;
+                          
+                          while ((match = expressionDisconnect.exec(line)) !== null) {
+                            // Skip if this is a string (already handled by string pattern)
+                            if (match[1] && match[1].startsWith('"')) continue;
+                            
+                            // Check if what comes before ends with an operator
+                            const before = line.substring(0, match.index);
+                            const endsWithOp = /(<=|>=|<>|[+\-*/&^=<>])\s*$/.test(before);
+                            
+                            if (!endsWithOp) {
+                              // Found disconnected expression
+                              const errorStart = match.index + match[1].length;
+                              const errorEnd = match.index + match[0].length;
+                              
+                              diagnostics.push({
+                                severity: monaco.MarkerSeverity.Error,
+                                startLineNumber: lineIndex + 1,
+                                startColumn: errorStart + 1,
+                                endLineNumber: lineIndex + 1,
+                                endColumn: errorEnd + 1,
+                                message: 'Disconnected expression - expressions must be connected by operators (+, -, *, /, etc.) or ampersand (&) for text concatenation',
+                                source: 'Formula Validator',
+                                code: 'DISCONNECTED_EXPRESSION'
+                              });
+                              break; // Only report first error per line
+                            }
+                          }
+                        }
+                        
+                        // Also check for disconnected expressions across lines
+                        for (let i = 1; i < linesWithoutComments.length; i++) {
+                          const prevLine = linesWithoutComments[i - 1].trim();
+                          const currentLine = linesWithoutComments[i].trim();
+                          
+                          if (!prevLine || !currentLine) continue; // Skip if either line is empty
+                          
+                          // Check if previous line ends with an operator
+                          const prevEndsWithOp = /(<=|>=|<>|[+\-*/&^=<>])\s*$/.test(prevLine);
+                          // Check if current line starts with an operator
+                          const currentStartsWithOp = /^\s*(<=|>=|<>|[+\-*/&^=<>])/.test(currentLine);
+                          
+                          // If neither, these are disconnected expressions
+                          if (!prevEndsWithOp && !currentStartsWithOp) {
+                            diagnostics.push({
+                              severity: monaco.MarkerSeverity.Error,
+                              startLineNumber: i + 1,
+                              startColumn: 1,
+                              endLineNumber: i + 1,
+                              endColumn: currentLine.length + 1,
+                              message: 'Disconnected expression - expressions on separate lines must be connected by operators (+, -, *, /, etc.) or ampersand (&) for text concatenation',
+                              source: 'Formula Validator',
+                              code: 'DISCONNECTED_EXPRESSION'
+                            });
+                          }
+                        }
+                        
+                        // 3. Check for periods in function arguments (should be commas)
                         // Need to check if we're in a function context and if parentheses are closed
                         const openParens = (formulaText.match(/\(/g) || []).length;
                         const closeParens = (formulaText.match(/\)/g) || []).length;
@@ -1559,7 +1674,7 @@
                                     
                                     diagnostics.push({
                                       severity: monaco.MarkerSeverity.Warning, // Use warning instead of error for incomplete formulas
-                                      startLineNumber: lineNum + 1, // +1 because line 1 is the "=" line
+                                      startLineNumber: lineNum + 1, // Line numbers are 1-based
                                       startColumn: colNum + 1,
                                       endLineNumber: lineNum + 1,
                                       endColumn: colNum + 2,
@@ -1976,7 +2091,7 @@
                           
                           // Get the line where the change occurred
                           const changeLine = change.range.startLineNumber;
-                          if (changeLine < 2) return; // Skip line 1
+                          // Line 1 is now valid - allow all interactions
                           
                           // Get the current line content (after the change - the ( has been inserted)
                           const currentLine = model.getLineContent(changeLine);
@@ -2252,13 +2367,16 @@
                   if (editorDomNode) {
                     editorDomNode.addEventListener('click', (e) => {
                       // If already in edit mode, Monaco Editor handles clicks automatically to position cursor
-                      // We don't need to interfere - just ensure the editor is not read-only
+                      // We don't need to interfere - just ensure the editor is not read-only and cursor is visible
                       if (isEditMode) {
                         // Ensure editor is editable (Monaco will handle cursor positioning automatically)
                         if (editor.getOption(monaco.editor.EditorOption.readOnly)) {
                           editor.updateOptions({ readOnly: false });
                         }
+                        // Ensure cursor is visible when clicking (including on line 1)
+                        editor.updateOptions({ cursorBlinking: 'blink' });
                         // Monaco Editor automatically positions cursor on click when not read-only
+                        // This works for all lines including line 1
                         return;
                       }
                       

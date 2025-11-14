@@ -1207,10 +1207,7 @@ button {
 }
 
 /* Prevent selection on first line */
-.formula-editor .monaco-editor .view-lines .view-line:first-child {
-  user-select: none !important;
-  pointer-events: none !important;
-}
+/* Removed - first line is now fully editable */
 
 /* Make the "=" in the line number area light grey */
 .formula-editor .monaco-editor .margin .line-numbers {
