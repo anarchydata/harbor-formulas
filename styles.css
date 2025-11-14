@@ -468,6 +468,15 @@ button {
   font-family: "Consolas", "Courier New", monospace;
 }
 
+/* Grid cell alignment: numbers and dates right-aligned, text left-aligned */
+.grid-table tbody td.cell-numeric .grid-cell-display {
+  text-align: right;
+}
+
+.grid-table tbody td.cell-text .grid-cell-display {
+  text-align: left;
+}
+
 .grid-table tbody td:last-child {
   border-right: none;
 }
@@ -818,10 +827,17 @@ button {
   min-height: 20px;
 }
 
+.formula-equals {
+  color: #858585;
+  font-size: 11px;
+  margin-left: 4px;
+  font-family: "Consolas", "Courier New", monospace;
+}
+
 .editor-wrapper {
   flex: 1;
   display: flex !important;
-  background: #000000;
+  background: #0a0a0a; /* Darker grey for selection mode */
   overflow: hidden !important;
   min-height: 150px !important;
   position: relative;
@@ -835,6 +851,23 @@ button {
   flex-shrink: 1;
   visibility: visible !important;
   opacity: 1 !important;
+  transition: background-color 0.3s ease;
+}
+
+/* Monaco editor text opacity - 30% in selection mode (only text, not background) */
+/* Target only the spans containing text, not the line containers */
+.editor-wrapper .monaco-editor .view-line span {
+  opacity: 0.3;
+  transition: opacity 0.3s ease;
+}
+
+.editor-wrapper.editor-edit-mode {
+  background: #000000; /* Normal black background in edit mode */
+}
+
+/* Monaco editor text opacity - 100% in edit mode (full opacity) */
+.editor-wrapper.editor-edit-mode .monaco-editor .view-line span {
+  opacity: 1;
 }
 
 /* Bottom sliding panes */
@@ -857,27 +890,25 @@ button {
   flex-direction: column;
   background: var(--panel);
   overflow: hidden;
-  transition: flex 0.3s ease-out;
+  /* Smooth slide animation */
+  transition: height 0.3s ease-in-out;
   /* No borders, stacked directly */
   border: none;
   /* Default collapsed state */
-  flex: 0 0 22px;
+  flex: 0 0 auto;
   min-height: 22px;
   visibility: visible !important;
   opacity: 1 !important;
+  height: 22px;
 }
 
 .sliding-pane:not(.collapsed) {
-  /* Height will be set by JavaScript to 50% of formula editor */
-  flex: 0 0 auto;
-  min-height: 0;
+  /* Height will be set by JavaScript to 40% of formula editor */
+  /* Animation is handled by CSS transition on height property */
 }
 
 .sliding-pane.collapsed {
-  flex: 0 0 22px;
-  min-height: 22px;
-  max-height: 22px;
-  height: 22px;
+  height: 22px !important;
 }
 
 .pane-header {
@@ -890,6 +921,7 @@ button {
   min-height: 22px;
   /* No borders, no hover */
   border: none;
+  width: 100%;
 }
 
 .pane-toggle {
@@ -923,6 +955,52 @@ button {
   text-transform: uppercase;
   letter-spacing: 0.5px;
   padding: 4px 0;
+  margin-right: 8px;
+}
+
+.pane-indicators {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: 4px;
+}
+
+.error-indicator,
+.warning-indicator {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.error-icon,
+.warning-icon,
+.error-count,
+.warning-count {
+  font-size: 11px;
+  color: #808080;
+  font-weight: normal;
+  line-height: 1;
+}
+
+.error-icon,
+.warning-icon {
+  width: 12px;
+  height: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  font-size: 10px;
+}
+
+.error-icon.has-errors,
+.error-count.has-errors {
+  color: #f48771;
+}
+
+.warning-icon.has-warnings,
+.warning-count.has-warnings {
+  color: #cca700;
 }
 
 .pane-content {
@@ -930,9 +1008,72 @@ button {
   padding: 8px 12px;
   overflow-y: auto;
   overflow-x: hidden;
-  font-size: 12px;
+  font-size: 11px;
   color: var(--text);
-  min-height: 0;
+}
+
+.message-item {
+  padding: 4px 0;
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  line-height: 1.4;
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+  border-radius: 2px;
+  padding-left: 4px;
+  padding-right: 4px;
+  margin-left: -4px;
+  margin-right: -4px;
+  border: 1px solid transparent;
+}
+
+.message-item:hover {
+  background-color: rgba(200, 200, 200, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.message-item.message-error {
+  color: #f48771;
+}
+
+.message-item.message-warning {
+  color: #cca700;
+}
+
+.message-icon {
+  font-size: 11px;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.message-text {
+  flex: 1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.message-location {
+  color: var(--text-muted);
+  font-family: "Consolas", "Courier New", monospace;
+}
+
+.message-source {
+  color: var(--text-muted);
+  font-size: 10px;
+}
+
+.message-content {
+  flex: 1;
+  min-width: 100%;
+}
+
+.message-code {
+  color: var(--text-muted);
+  font-size: 10px;
+  font-style: italic;
+}
   /* Custom scrollbar styling similar to grid */
   scrollbar-width: thin;
   scrollbar-color: rgba(60, 60, 60, 0.5) transparent;

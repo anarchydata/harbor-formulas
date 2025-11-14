@@ -107,6 +107,7 @@
       <div class="formula-editor" id="formulaEditor" style="width: 400px; min-width: 200px; flex: 0 0 400px; display: flex;">
         <div class="editor-header">
           <span class="cell-range-pill" id="cellRangePill"></span>
+          <span class="formula-equals">=</span>
         </div>
         <div class="editor-wrapper">
           <div id="monacoEditor" style="width: 100%; height: 100%;"></div>
@@ -116,6 +117,16 @@
             <div class="pane-header" data-pane="messages">
               <span class="pane-toggle"></span>
               <span class="pane-title">MESSAGES</span>
+              <span class="pane-indicators">
+                <span class="error-indicator">
+                  <span class="error-icon">✕</span>
+                  <span class="error-count">0</span>
+                </span>
+                <span class="warning-indicator">
+                  <span class="warning-icon">⚠</span>
+                  <span class="warning-count">0</span>
+                </span>
+              </span>
             </div>
             <div class="pane-content" id="messagesContent"></div>
           </div>
@@ -169,6 +180,9 @@
           window.hf = HyperFormula.buildEmpty({
             licenseKey: 'gpl-v3' // Using GPL license for open source projects
           });
+          
+          // Initialize named ranges storage (Set for fast lookup)
+          window.namedRanges = new Set();
           
           // Add Sheet1 - addSheet() returns the sheet name, not the ID
           const sheetName = window.hf.addSheet('Sheet1');
@@ -266,7 +280,7 @@
                       "editorLineNumber.foreground": "#858585",
                       "editor.selectionBackground": "#264F78",
                       "editorCursor.foreground": "#AEAFAD",
-                      "editor.lineHighlightBackground": "#1a1a1a",
+                      "editor.lineHighlightBackground": "#000000",
                       "editorIndentGuide.background": "#404040",
                       "editorIndentGuide.activeBackground": "#707070",
                     }
@@ -320,32 +334,32 @@
                     const functionPattern = functionNames
                       .map(name => name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
                       .join('|');
-                    
-                    // Set up tokenization rules for excel-formula
-                    monaco.languages.setMonarchTokensProvider("excel-formula", {
-                      tokenizer: {
-                        root: [
-                          // Cell references (e.g., A1, B2, $A$1, Sheet1!A1)
-                          [/[A-Z]+\$?[0-9]+\$?|'[^']*'![A-Z]+\$?[0-9]+\$?/, "cell-reference"],
+                  
+                  // Set up tokenization rules for excel-formula
+                  monaco.languages.setMonarchTokensProvider("excel-formula", {
+                    tokenizer: {
+                      root: [
+                        // Cell references (e.g., A1, B2, $A$1, Sheet1!A1)
+                        [/[A-Z]+\$?[0-9]+\$?|'[^']*'![A-Z]+\$?[0-9]+\$?/, "cell-reference"],
                           // Functions - use all HyperFormula function names
                           [new RegExp(`\\b(${functionPattern})\\b`, 'i'), "function"],
-                          // Numbers (integers and decimals)
-                          [/\d+\.?\d*/, "number"],
-                          // Strings (text in quotes)
-                          [/"([^"\\]|\\.)*"/, "string"],
-                          // Operators
-                          [/[+\-*/=<>]/, "operator"],
-                          // Parentheses and brackets
-                          [/[()]/, "delimiter.parenthesis"],
-                          [/[[\]]/, "delimiter.bracket"],
-                          // Commas and semicolons
-                          [/[,;]/, "delimiter"],
-                          // Whitespace
-                          [/\s+/, ""],
-                          // Everything else
-                          [/./, ""]
-                        ]
-                      }
+                        // Numbers (integers and decimals)
+                        [/\d+\.?\d*/, "number"],
+                        // Strings (text in quotes)
+                        [/"([^"\\]|\\.)*"/, "string"],
+                        // Operators
+                        [/[+\-*/=<>]/, "operator"],
+                        // Parentheses and brackets
+                        [/[()]/, "delimiter.parenthesis"],
+                        [/[[\]]/, "delimiter.bracket"],
+                        // Commas and semicolons
+                        [/[,;]/, "delimiter"],
+                        // Whitespace
+                        [/\s+/, ""],
+                        // Everything else
+                        [/./, ""]
+                      ]
+                    }
                     });
                     
                     console.log('Tokenizer set up with function highlighting');
@@ -396,29 +410,25 @@
                   monacoEditorContainer.style.height = "150px";
                   monacoEditorContainer.style.minHeight = "150px";
                   
-                  // Create initial value with empty first line, then 6 empty lines
-                  const initialValue = "\n\n\n\n\n\n";
+                  // Create initial value with 7 empty lines
+                  const initialValue = "\n\n\n\n\n\n\n";
                   
                   editor = monaco.editor.create(monacoEditorContainer, {
                     value: initialValue,
                     language: "excel-formula",
                     theme: "excel-formula-dark",
+                    cursorBlinking: 'hidden', // Hide cursor initially (will show in edit mode)
                     automaticLayout: false,
                     fontSize: 12,
                     fontFamily: "Consolas, 'Courier New', monospace",
-                    lineNumbers: function(lineNumber) {
-                      // First line shows "=", then start with 1
-                      if (lineNumber === 1) {
-                        return "=";
-                      }
-                      return (lineNumber - 1).toString();
-                    },
+                    lineNumbers: 'on',
                     minimap: { enabled: false },
                     scrollBeyondLastLine: false,
                     readOnly: true,
                     wordWrap: "on",
                     lineHeight: 1.5,
-                    tabSize: 2,
+                    tabSize: 4,
+                    insertSpaces: true, // Use spaces instead of tab characters
                     renderLineHighlight: "none",
                     overviewRulerBorder: false,
                     hideCursorInOverviewRuler: true,
@@ -472,7 +482,7 @@
                       },
                       suggestOnTriggerCharacters: false, // Don't trigger on special characters
                       acceptSuggestionOnCommitCharacter: true,
-                      acceptSuggestionOnEnter: 'off',
+                      acceptSuggestionOnEnter: 'off', // Enter always goes to new line, never accepts suggestions
                       acceptSuggestionOnTab: 'on',
                       snippetSuggestions: 'top',
                       hideStatusBar: false
@@ -487,34 +497,7 @@
                   // Ensure theme is applied
                   monaco.editor.setTheme("excel-formula-dark");
                   
-                  // Decorate first line to be light grey and read-only
-                  let firstLineDecoration = null;
-                  function updateFirstLineDecoration() {
-                    const model = editor.getModel();
-                    if (!model) return;
-                    
-                    // Remove existing decoration if any
-                    if (firstLineDecoration) {
-                      editor.deltaDecorations([firstLineDecoration], []);
-                      firstLineDecoration = null;
-                    }
-                    
-                    // Add decoration for first line (light grey, read-only)
-                    firstLineDecoration = editor.deltaDecorations([], [{
-                      range: new monaco.Range(1, 1, 1, model.getLineMaxColumn(1)),
-                      options: {
-                        inlineClassName: 'formula-first-line-readonly',
-                        className: 'formula-first-line-readonly',
-                        isWholeLine: true,
-                        stickiness: monaco.editor.TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges
-                      }
-                    }]);
-                  }
-                  
-                  // Update decoration when model changes
-                  editor.onDidChangeModelContent(() => {
-                    updateFirstLineDecoration();
-                  });
+                  // No longer need first line decoration since "=" is in the header
                   
                   // Track if we're programmatically setting cursor (to avoid event loop)
                   window.isProgrammaticCursorChange = false;
@@ -528,97 +511,18 @@
                       return;
                     }
                     
-                    if (e.position.lineNumber === 1) {
-                      // Move cursor to line 2, column 1 immediately (no setTimeout)
-                      window.isProgrammaticCursorChange = true;
-                      editor.setPosition({ lineNumber: 2, column: 1 });
-                      // Reset flag after setting position
-                      Promise.resolve().then(() => {
-                        window.isProgrammaticCursorChange = false;
-                      });
-                    }
+                    // No longer need to prevent line 1 - it's now a valid line
                   });
                   
-                  // Prevent selection on line 1
+                  // No longer need to prevent selection on line 1 - it's now a valid line
                   editor.onDidChangeCursorSelection((e) => {
-                    const selection = e.selection;
-                    if (selection.startLineNumber === 1 || selection.endLineNumber === 1) {
-                      // If selection includes line 1, move it to start at line 2
-                      const newStartLine = Math.max(2, selection.startLineNumber);
-                      const newEndLine = Math.max(2, selection.endLineNumber);
-                      const newStartCol = selection.startLineNumber === 1 ? 1 : selection.startColumn;
-                      const newEndCol = selection.endLineNumber === 1 ? 1 : selection.endColumn;
-                      
-                      setTimeout(() => {
-                        editor.setSelection(new monaco.Range(
-                          newStartLine, newStartCol,
-                          newEndLine, newEndCol
-                        ));
-                      }, 0);
-                    }
+                    // Line 1 is now valid, so no special handling needed
                   });
                   
-                  // Prevent editing on line 1 - keep it empty
-                  editor.onDidChangeModelContent((e) => {
-                    const model = editor.getModel();
-                    if (!model) return;
-                    
-                    e.changes.forEach(change => {
-                      // If change affects line 1, clear it
-                      if (change.range.startLineNumber === 1 || change.range.endLineNumber === 1) {
-                        const line1Content = model.getLineContent(1);
-                        // If line 1 has any content, clear it
-                        if (line1Content !== "") {
-                          setTimeout(() => {
-                            const edit = {
-                              range: new monaco.Range(1, 1, 1, model.getLineMaxColumn(1)),
-                              text: ""
-                            };
-                            model.pushEditOperations([], [edit], () => null);
-                          }, 0);
-                        }
-                      }
-                    });
-                  });
+                  // Line 1 is now a valid line, so no need to prevent editing on it
                   
-                  // Set initial cursor position to line 2
-                  editor.setPosition({ lineNumber: 2, column: 1 });
-                  
-                  // Initial decoration
-                  updateFirstLineDecoration();
-                  
-                  // Style the first line number ("=") to be light grey
-                  function styleFirstLineNumber() {
-                    const editorDom = monacoEditorContainer;
-                    if (!editorDom) return;
-                    
-                    // Find the first line number element
-                    const lineNumbers = editorDom.querySelectorAll('.monaco-editor .margin-view-overlays .line-numbers .line-number');
-                    if (lineNumbers.length > 0) {
-                      const firstLineNumber = lineNumbers[0];
-                      if (firstLineNumber && firstLineNumber.textContent === "=") {
-                        firstLineNumber.style.color = "#858585"; // Light grey
-                      }
-                    }
-                  }
-                  
-                  // Style immediately and also after layout
-                  setTimeout(styleFirstLineNumber, 100);
-                  editor.onDidLayoutChange(() => {
-                    setTimeout(styleFirstLineNumber, 50);
-                  });
-                  
-                  // Also watch for DOM changes in case line numbers are re-rendered
-                  const observer = new MutationObserver(() => {
-                    styleFirstLineNumber();
-                  });
-                  
-                  if (monacoEditorContainer) {
-                    observer.observe(monacoEditorContainer, {
-                      childList: true,
-                      subtree: true
-                    });
-                  }
+                  // Set initial cursor position to line 1
+                  editor.setPosition({ lineNumber: 1, column: 1 });
                   
                   // Throttled layout update for performance
                   let layoutTimeout = null;
@@ -653,17 +557,17 @@
                       }
                       
                       // Use requestAnimationFrame to ensure DOM has updated
-                      requestAnimationFrame(() => {
+                        requestAnimationFrame(() => {
                         // Get bounding rectangles
-                        const formulaRect = formulaEditor.getBoundingClientRect();
-                        const wrapperRect = editorWrapper.getBoundingClientRect();
-                        const widgetRect = suggestWidget.getBoundingClientRect();
-                        const editorRect = monacoEditorContainer.getBoundingClientRect();
-                        
+                          const formulaRect = formulaEditor.getBoundingClientRect();
+                          const wrapperRect = editorWrapper.getBoundingClientRect();
+                          const widgetRect = suggestWidget.getBoundingClientRect();
+                          const editorRect = monacoEditorContainer.getBoundingClientRect();
+                          
                         if (!formulaRect || !widgetRect || !editorRect) return;
                         
                         // Calculate available space - must stay within formula editor container
-                        const margin = 10;
+                          const margin = 10;
                         
                         // Maximum width: formula editor width minus margins
                         // This prevents overflow into the grid area - use the actual formula editor width
@@ -679,18 +583,18 @@
                           formulaRect.height - 60, // Leave space for header and editor
                           300 // Absolute max
                         );
-                        
-                        // Get current widget dimensions
-                        const currentWidth = widgetRect.width || 300;
-                        const currentHeight = widgetRect.height || 200;
-                        
+                          
+                          // Get current widget dimensions
+                          const currentWidth = widgetRect.width || 300;
+                          const currentHeight = widgetRect.height || 200;
+                          
                         // Calculate widget position relative to formula editor
                         const widgetLeftRelative = widgetRect.left - formulaRect.left;
                         const widgetRightRelative = widgetRect.right - formulaRect.left;
-                        
+                          
                         // Constrain width to fit within formula editor (don't exceed right edge)
-                        let constrainedWidth = Math.min(currentWidth, maxWidth);
-                        
+                          let constrainedWidth = Math.min(currentWidth, maxWidth);
+                          
                         // Ensure right edge doesn't exceed formula editor bounds
                         const maxRightInFormula = formulaRect.width - margin;
                         const widgetRightInFormula = widgetLeftRelative + constrainedWidth;
@@ -830,16 +734,16 @@
                         const suggestions = [];
                         const word = model.getWordUntilPosition(position);
                         
-                        // Get current line (skip line 1, so get line 2+)
+                        // Get all lines from editor
                         const allLines = model.getValue().split('\n');
-                        if (allLines.length < 2) return { suggestions };
+                        if (allLines.length < 1) return { suggestions };
                         
                         const currentLineIndex = position.lineNumber - 1; // Convert to 0-based
-                        if (currentLineIndex < 1) return { suggestions }; // Skip line 1
+                        // Line 1 is now valid, so no need to skip it
                         
                         const currentLine = allLines[currentLineIndex];
                         const textBeforeCursor = currentLine.substring(0, position.column - 1);
-                        
+
                         // Get the text at the cursor position to better detect what's being typed
                         const textUntilPosition = model.getValueInRange({
                           startLineNumber: position.lineNumber,
@@ -988,42 +892,42 @@
                             if (!window.hyperFormulaFunctions || window.hyperFormulaFunctions.length === 0) {
                               return { suggestions }; // Function list not loaded yet
                             }
-                            const wordUpper = actualWord.toUpperCase();
+                        const wordUpper = actualWord.toUpperCase();
                             const functionSuggestions = window.hyperFormulaFunctions
-                              .filter(func => {
+                          .filter(func => {
                                 // Case-insensitive matching - exact match or starts with typed text
-                                return func.name.toUpperCase().startsWith(wordUpper);
-                              })
-                              .map(func => {
-                                // Calculate the correct range based on actual word
-                                const wordStart = textUntilPosition.length - actualWord.length;
-                                const correctRange = {
-                                  startLineNumber: position.lineNumber,
-                                  endLineNumber: position.lineNumber,
-                                  startColumn: wordStart + 1,
-                                  endColumn: position.column
-                                };
+                            return func.name.toUpperCase().startsWith(wordUpper);
+                          })
+                          .map(func => {
+                            // Calculate the correct range based on actual word
+                            const wordStart = textUntilPosition.length - actualWord.length;
+                            const correctRange = {
+                              startLineNumber: position.lineNumber,
+                              endLineNumber: position.lineNumber,
+                              startColumn: wordStart + 1,
+                              endColumn: position.column
+                            };
                                 
                                 // Create snippet template from function signature
                                 // For IF: IF(logical, value, value) becomes IF(${1:logical}, ${2:value}, ${3:value})
                                 const snippetTemplate = window.createFunctionSnippet(func);
-                                
-                                return {
-                                  label: func.name,
-                                  kind: monaco.languages.CompletionItemKind.Function,
+                            
+                            return {
+                              label: func.name,
+                              kind: monaco.languages.CompletionItemKind.Function,
                                   insertText: snippetTemplate,
-                                  insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
-                                  documentation: {
-                                    value: func.description 
-                                      ? `**${func.name}**\n\n${func.description}\n\n**Syntax:** \`${func.signature}\``
-                                      : `**${func.name}**\n\n**Syntax:** \`${func.signature}\``
-                                  },
-                                  range: correctRange,
+                              insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+                              documentation: {
+                                value: func.description 
+                                  ? `**${func.name}**\n\n${func.description}\n\n**Syntax:** \`${func.signature}\``
+                                  : `**${func.name}**\n\n**Syntax:** \`${func.signature}\``
+                              },
+                              range: correctRange,
                                   detail: func.signature,
                                   sortText: '1000', // Lower priority than punctuation
                                   preselect: func.name.toUpperCase() === wordUpper // Auto-select on exact match
-                                };
-                              });
+                            };
+                          });
                             
                             suggestions.push(...functionSuggestions);
                           }
@@ -1082,12 +986,12 @@
                         const diagnostics = [];
                         const text = model.getValue();
                         
-                        // Skip first line (the "=" visual indicator line)
+                        // Get all lines from editor
                         const lines = text.split('\n');
-                        if (lines.length < 2) return { markers: [] };
+                        if (lines.length < 1) return { markers: [] };
                         
-                        // Get formula starting from line 2
-                        const formulaText = lines.slice(1).join('\n').trim();
+                        // Get formula from all lines
+                        const formulaText = lines.join('\n').trim();
                         if (!formulaText) return { markers: [] };
                         
                         // Check for common syntax errors
@@ -1107,7 +1011,7 @@
                           const beforeMatch = formulaText.substring(0, match.index);
                           const formulaLines = beforeMatch.split('\n');
                           const formulaLineIndex = formulaLines.length - 1;
-                          const editorLineNumber = formulaLineIndex + 2; // +2 because line 1 is skipped, +1 for 1-based
+                          const editorLineNumber = formulaLineIndex + 1; // +1 for 1-based line numbers
                           const periodColumn = formulaLines[formulaLineIndex].length + match[1].length + 1; // Position of period
                           
                           // Check if we're in a function call context
@@ -1161,28 +1065,332 @@
                           }
                         }
                         
-                        // 2. Check for double commas
-                        const doubleCommaRegex = /,\s*,/g;
-                        while ((match = doubleCommaRegex.exec(formulaText)) !== null) {
-                          const beforeMatch = formulaText.substring(0, match.index);
+                        // 2. Check for empty parameters within function calls
+                        // Find all function calls and check each parameter position
+                        const functionCallPattern = /\b([A-Za-z_][A-Za-z0-9_]*)\s*\(/g;
+                        while ((match = functionCallPattern.exec(formulaText)) !== null) {
+                          const funcName = match[1];
+                          const openParenIndex = match.index + match[0].length - 1; // Position of '('
+                          
+                          // Check if this is a known function
+                          let isFunction = false;
+                          if (window.hyperFormulaFunctions) {
+                            isFunction = window.hyperFormulaFunctions.some(f => 
+                              f.name.toUpperCase() === funcName.toUpperCase()
+                            );
+                          }
+                          
+                          if (!isFunction) continue;
+                          
+                          // Find the matching closing parenthesis for this function call
+                          let depth = 0;
+                          let inString = false;
+                          let escaped = false;
+                          let closeParenIndex = -1;
+                          
+                          for (let i = openParenIndex; i < formulaText.length; i++) {
+                            const char = formulaText[i];
+                            
+                            if (escaped) {
+                              escaped = false;
+                              continue;
+                            }
+                            
+                            if (char === '\\') {
+                              escaped = true;
+                              continue;
+                            }
+                            
+                            if (char === '"') {
+                              inString = !inString;
+                              continue;
+                            }
+                            
+                            if (!inString) {
+                              if (char === '(') {
+                                depth++;
+                              } else if (char === ')') {
+                                depth--;
+                                if (depth === 0) {
+                                  closeParenIndex = i;
+                                  break;
+                                }
+                              }
+                            }
+                          }
+                          
+                          if (closeParenIndex === -1) continue; // No matching closing paren
+                          
+                          // Extract the parameter string (between opening and closing paren)
+                          const paramString = formulaText.substring(openParenIndex + 1, closeParenIndex);
+                          
+                          // Find all parameter boundaries (commas and edges)
+                          const paramBoundaries = [];
+                          paramBoundaries.push({ pos: 0, type: 'start' }); // Start of parameters
+                          
+                          // Track string state when finding commas
+                          let paramInString = false;
+                          let paramEscaped = false;
+                          for (let i = 0; i < paramString.length; i++) {
+                            const char = paramString[i];
+                            
+                            if (paramEscaped) {
+                              paramEscaped = false;
+                              continue;
+                            }
+                            
+                            if (char === '\\') {
+                              paramEscaped = true;
+                              continue;
+                            }
+                            
+                            if (char === '"') {
+                              paramInString = !paramInString;
+                              continue;
+                            }
+                            
+                            if (!paramInString && char === ',') {
+                              paramBoundaries.push({ pos: i, type: 'comma' });
+                            }
+                          }
+                          
+                          paramBoundaries.push({ pos: paramString.length, type: 'end' }); // End of parameters
+                          
+                          // Check each parameter position for emptiness
+                          for (let i = 0; i < paramBoundaries.length - 1; i++) {
+                            const startBoundary = paramBoundaries[i];
+                            const endBoundary = paramBoundaries[i + 1];
+                            
+                            // Extract parameter content (excluding boundaries)
+                            let paramStart = startBoundary.pos;
+                            let paramEnd = endBoundary.pos;
+                            
+                            // Adjust start: if previous boundary is a comma, start after it
+                            if (startBoundary.type === 'comma') {
+                              paramStart = startBoundary.pos + 1;
+                            }
+                            
+                            // Extract the parameter text
+                            const paramText = paramString.substring(paramStart, paramEnd).trim();
+                            
+                            // If parameter is empty (only whitespace), create a warning
+                            if (paramText.length === 0) {
+                              // Calculate position in the full formula
+                              const absoluteStartPos = openParenIndex + 1 + paramStart;
+                              const absoluteEndPos = openParenIndex + 1 + paramEnd;
+                              
+                              // Calculate line and column
+                              const textBeforeParam = formulaText.substring(0, absoluteStartPos);
+                              const formulaLines = textBeforeParam.split('\n');
+                              const formulaLineIndex = formulaLines.length - 1;
+                              const editorLineNumber = formulaLineIndex + 1; // +1 for 1-based line numbers
+                              const startColumn = formulaLines[formulaLineIndex].length + 1; // +1 for 1-based
+                              
+                              // Calculate end column
+                              const textBeforeEnd = formulaText.substring(0, absoluteEndPos);
+                              const endLines = textBeforeEnd.split('\n');
+                              const endLineIndex = endLines.length - 1;
+                              const endLineNumber = endLineIndex + 2;
+                              const endColumn = endLines[endLineIndex].length + 1;
+                              
+                              diagnostics.push({
+                                severity: monaco.MarkerSeverity.Warning,
+                                startLineNumber: editorLineNumber,
+                                startColumn: startColumn,
+                                endLineNumber: endLineNumber,
+                                endColumn: endColumn,
+                                message: 'Empty parameter - may cause unexpected behavior',
+                                source: 'Formula Validator',
+                                code: 'EMPTY_PARAMETER'
+                              });
+                            }
+                          }
+                        }
+                        
+                        // 3. Check for bare identifiers (strings without quotes) that are not valid
+                        // Find all bare identifiers (words not in quotes, not numbers, not operators, not delimiters)
+                        const identifierPattern = /\b[A-Za-z_][A-Za-z0-9_]*\b/g;
+                        const processedPositions = new Set(); // Track processed positions to avoid duplicates
+                        
+                        while ((match = identifierPattern.exec(formulaText)) !== null) {
+                          const identifier = match[0];
+                          const startPos = match.index;
+                          const endPos = startPos + identifier.length;
+                          
+                          // Skip if we've already processed this position
+                          if (processedPositions.has(startPos)) continue;
+                          processedPositions.add(startPos);
+                          
+                          // Check if identifier is inside a quoted string
+                          const textBefore = formulaText.substring(0, startPos);
+                          const openQuotes = (textBefore.match(/"/g) || []).length;
+                          const closeQuotes = (textBefore.match(/"/g) || []).length;
+                          const isInsideString = (openQuotes % 2 === 1);
+                          if (isInsideString) continue;
+                          
+                          // Check if it's a function (case-insensitive)
+                          const isFunction = window.hyperFormulaFunctions && 
+                                             window.hyperFormulaFunctions.some(f => 
+                                               f.name.toUpperCase() === identifier.toUpperCase()
+                                             );
+                          if (isFunction) continue;
+                          
+                          // Check if it's a logical value
+                          const isLogical = ['TRUE', 'FALSE'].includes(identifier.toUpperCase());
+                          if (isLogical) continue;
+                          
+                          // Check if it's a cell reference (pattern: 1-3 letters, optional $, digits, optional $)
+                          const isCellReference = /^[A-Z]{1,3}\$?\d+\$?$/i.test(identifier);
+                          if (isCellReference) continue;
+                          
+                          // Check if it's a named range
+                          const isNamedRange = window.namedRanges && window.namedRanges.has(identifier.toUpperCase());
+                          if (isNamedRange) continue;
+                          
+                          // If we get here, it's an invalid bare identifier - mark it with red squiggle
+                          const beforeMatch = formulaText.substring(0, startPos);
                           const formulaLines = beforeMatch.split('\n');
                           const formulaLineIndex = formulaLines.length - 1;
-                          const editorLineNumber = formulaLineIndex + 2; // +2 because line 1 is skipped, +1 for 1-based
-                          const column = formulaLines[formulaLineIndex].length + 1; // +1 for 1-based
+                          const editorLineNumber = formulaLineIndex + 1; // +1 for 1-based line numbers
+                          const startColumn = formulaLines[formulaLineIndex].length + 1; // +1 for 1-based
+                          const endColumn = startColumn + identifier.length;
                           
                           diagnostics.push({
-                            severity: monaco.MarkerSeverity.Warning,
+                            severity: monaco.MarkerSeverity.Error,
                             startLineNumber: editorLineNumber,
-                            startColumn: column,
+                            startColumn: startColumn,
                             endLineNumber: editorLineNumber,
-                            endColumn: column + 1,
-                            message: 'Unexpected comma',
+                            endColumn: endColumn,
+                            message: `Invalid identifier: "${identifier}". Use double quotes for strings or define as a named range.`,
                             source: 'Formula Validator',
-                            code: 'DOUBLE_COMMA'
+                            code: 'INVALID_IDENTIFIER'
                           });
                         }
                         
-                        // 3. Validate formula syntax with HyperFormula if available
+                        // 4. Validate function calls match their signatures
+                        // Check if function calls have the correct number of arguments
+                        if (window.hyperFormulaFunctions && window.hyperFormulaFunctions.length > 0) {
+                          // Find all function calls in the formula
+                          // Pattern: function name followed by opening paren, then arguments, then closing paren
+                          const functionCallPattern = /\b([A-Za-z_][A-Za-z0-9_]*)\s*\(([^)]*)\)/gi;
+                          let funcMatch;
+                          
+                          while ((funcMatch = functionCallPattern.exec(formulaText)) !== null) {
+                            const funcName = funcMatch[1];
+                            const argsString = funcMatch[2];
+                            const fullMatch = funcMatch[0];
+                            const matchStart = funcMatch.index;
+                            const matchEnd = matchStart + fullMatch.length;
+                            
+                            // Check if this is a known function (case-insensitive)
+                            const matchingFunction = window.hyperFormulaFunctions.find(f => 
+                              f.name.toUpperCase() === funcName.toUpperCase()
+                            );
+                            
+                            if (matchingFunction) {
+                              // Parse the function signature to get expected parameters
+                              const signature = matchingFunction.signature;
+                              const sigMatch = signature.match(/^(\w+)\s*\((.*)\)$/);
+                              
+                              if (sigMatch) {
+                                const paramsString = sigMatch[2];
+                                
+                                // Count expected parameters (handle variable args with ...)
+                                let expectedParamCount = 0;
+                                if (paramsString.trim() !== '') {
+                                  const params = paramsString.split(',').map(p => p.trim());
+                                  expectedParamCount = params.length;
+                                  // Check if last param is variable args (...)
+                                  const hasVariableArgs = params.length > 0 && params[params.length - 1].endsWith('...');
+                                  
+                                  // Count actual arguments provided
+                                  const trimmedArgs = argsString.trim();
+                                  let actualArgCount = 0;
+                                  
+                                  if (trimmedArgs.length > 0) {
+                                    // Count commas to determine argument count
+                                    // Need to be careful about commas inside strings or nested function calls
+                                    let depth = 0; // Track nesting depth (parentheses)
+                                    let inString = false;
+                                    let escaped = false;
+                                    let commaCount = 0;
+                                    
+                                    for (let i = 0; i < trimmedArgs.length; i++) {
+                                      const char = trimmedArgs[i];
+                                      
+                                      if (escaped) {
+                                        escaped = false;
+                                        continue;
+                                      }
+                                      
+                                      if (char === '\\') {
+                                        escaped = true;
+                                        continue;
+                                      }
+                                      
+                                      if (char === '"') {
+                                        inString = !inString;
+                                        continue;
+                                      }
+                                      
+                                      if (!inString) {
+                                        if (char === '(') {
+                                          depth++;
+                                        } else if (char === ')') {
+                                          depth--;
+                                        } else if (char === ',' && depth === 0) {
+                                          commaCount++;
+                                        }
+                                      }
+                                    }
+                                    
+                                    actualArgCount = commaCount + 1; // Number of args = commas + 1
+                                  }
+                                  
+                                  // Validate argument count
+                                  // If function has variable args, actual count must be >= minimum (all but last param)
+                                  // If function doesn't have variable args, actual count must equal expected count
+                                  const minRequiredArgs = hasVariableArgs ? expectedParamCount - 1 : expectedParamCount;
+                                  const isValidArgCount = hasVariableArgs 
+                                    ? actualArgCount >= minRequiredArgs 
+                                    : actualArgCount === expectedParamCount;
+                                  
+                                  if (!isValidArgCount) {
+                                    // Calculate line and column for the error marker
+                                    const beforeMatch = formulaText.substring(0, matchStart);
+                                    const formulaLines = beforeMatch.split('\n');
+                                    const formulaLineIndex = formulaLines.length - 1;
+                                    const editorLineNumber = formulaLineIndex + 1; // +1 for 1-based line numbers
+                                    const startColumn = formulaLines[formulaLineIndex].length + 1; // +1 for 1-based
+                                    
+                                    // Find end of function call
+                                    const matchEndLines = formulaText.substring(0, matchEnd).split('\n');
+                                    const matchEndLineIndex = matchEndLines.length - 1;
+                                    const matchEndEditorLine = matchEndLineIndex + 2;
+                                    const endColumn = matchEndLines[matchEndLineIndex].length + 1;
+                                    
+                                    const expectedMsg = hasVariableArgs 
+                                      ? `Expected at least ${minRequiredArgs} argument(s), got ${actualArgCount}`
+                                      : `Expected ${expectedParamCount} argument(s), got ${actualArgCount}`;
+                                    
+                                    diagnostics.push({
+                                      severity: monaco.MarkerSeverity.Error,
+                                      startLineNumber: editorLineNumber,
+                                      startColumn: startColumn,
+                                      endLineNumber: matchEndEditorLine,
+                                      endColumn: endColumn,
+                                      message: `${matchingFunction.name}: ${expectedMsg}. Signature: ${signature}`,
+                                      source: 'Formula Validator',
+                                      code: 'FUNCTION_SIGNATURE_MISMATCH'
+                                    });
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+                        
+                        // 5. Validate formula syntax with HyperFormula if available
                         // Only validate if the formula looks complete (has closing parens, etc.)
                         if (window.hf && formulaText) {
                           try {
@@ -1335,6 +1543,129 @@
                       }
                     };
                     
+                    // Function to update messages pane with error/warning counts and details
+                    function updateMessagesPane(markers) {
+                      if (!markers || markers.length === 0) {
+                        markers = [];
+                      }
+                      
+                      // Count errors and warnings
+                      const errorCount = markers.filter(m => m.severity === monaco.MarkerSeverity.Error).length;
+                      const warningCount = markers.filter(m => m.severity === monaco.MarkerSeverity.Warning).length;
+                      
+                      // Get indicator elements
+                      const errorIcon = document.querySelector('.error-icon');
+                      const errorCountSpan = document.querySelector('.error-count');
+                      const warningIcon = document.querySelector('.warning-icon');
+                      const warningCountSpan = document.querySelector('.warning-count');
+                      const messagesContent = document.getElementById('messagesContent');
+                      
+                      // Update error indicator
+                      if (errorIcon && errorCountSpan) {
+                        errorCountSpan.textContent = errorCount;
+                        if (errorCount > 0) {
+                          errorIcon.classList.add('has-errors');
+                          errorCountSpan.classList.add('has-errors');
+                        } else {
+                          errorIcon.classList.remove('has-errors');
+                          errorCountSpan.classList.remove('has-errors');
+                        }
+                      }
+                      
+                      // Update warning indicator
+                      if (warningIcon && warningCountSpan) {
+                        warningCountSpan.textContent = warningCount;
+                        if (warningCount > 0) {
+                          warningIcon.classList.add('has-warnings');
+                          warningCountSpan.classList.add('has-warnings');
+                        } else {
+                          warningIcon.classList.remove('has-warnings');
+                          warningCountSpan.classList.remove('has-warnings');
+                        }
+                      }
+                      
+                      // Populate messages content
+                      if (messagesContent) {
+                        if (markers.length === 0) {
+                          messagesContent.innerHTML = '<div class="message-item message-success"><span class="message-icon" style="color: #4ec9b0;">✓</span><span class="message-content">No errors or warnings</span></div>';
+                        } else {
+                          // Sort by severity (errors first) and then by line number
+                          const sortedMarkers = [...markers].sort((a, b) => {
+                            if (a.severity !== b.severity) {
+                              return a.severity - b.severity; // Error (8) comes before Warning (4)
+                            }
+                            return a.startLineNumber - b.startLineNumber;
+                          });
+                          
+                          const messagesHTML = sortedMarkers.map((marker, index) => {
+                            const severity = marker.severity === monaco.MarkerSeverity.Error ? 'error' : 'warning';
+                            const icon = marker.severity === monaco.MarkerSeverity.Error ? '✕' : '⚠';
+                            const source = marker.source || 'Unknown';
+                            const code = marker.code || '';
+                            const messageText = marker.message || 'No message';
+                            
+                            // Store marker data in data attributes for navigation
+                            return `
+                              <div class="message-item message-${severity}" 
+                                   data-line="${marker.startLineNumber}" 
+                                   data-column="${marker.startColumn}"
+                                   data-end-line="${marker.endLineNumber || marker.startLineNumber}"
+                                   data-end-column="${marker.endColumn || marker.startColumn}"
+                                   data-marker-index="${index}">
+                                <span class="message-icon">${icon}</span>
+                                <span class="message-text">
+                                  <span class="message-location">Line ${marker.startLineNumber}:${marker.startColumn}</span>
+                                  <span class="message-source">[${source}]</span>
+                                  <span class="message-content">${escapeHtml(messageText)}</span>
+                                  ${code ? `<span class="message-code">(${code})</span>` : ''}
+                                </span>
+                              </div>
+                            `;
+                          }).join('');
+                          
+                          messagesContent.innerHTML = messagesHTML;
+                          
+                          // Add click handlers to navigate to error/warning locations
+                          const messageItems = messagesContent.querySelectorAll('.message-item[data-line]');
+                          messageItems.forEach(item => {
+                            item.addEventListener('click', () => {
+                              const line = parseInt(item.getAttribute('data-line'));
+                              const column = parseInt(item.getAttribute('data-column'));
+                              const endLine = parseInt(item.getAttribute('data-end-line'));
+                              const endColumn = parseInt(item.getAttribute('data-end-column'));
+                              
+                              // Get the editor instance (use window.monacoEditor or the local editor variable)
+                              const currentEditor = window.monacoEditor || editor;
+                              const currentMonaco = window.monaco || monaco;
+                              
+                              // Navigate to the error/warning location
+                              if (currentEditor && currentMonaco && typeof currentEditor.setPosition === 'function') {
+                                // Set cursor position
+                                currentEditor.setPosition({ lineNumber: line, column: column });
+                                
+                                // Select the error/warning range
+                                const range = new currentMonaco.Range(line, column, endLine, endColumn);
+                                currentEditor.setSelection(range);
+                                
+                                // Reveal the line in the center of the viewport
+                                currentEditor.revealLineInCenter(line);
+                                
+                                // Focus the editor
+                                currentEditor.focus();
+                              }
+                            });
+                          });
+                        }
+                      }
+                    }
+                    
+                    // Helper function to escape HTML
+                    function escapeHtml(text) {
+                      const div = document.createElement('div');
+                      div.textContent = text;
+                      return div.innerHTML;
+                    }
+                    
                     // Use Monaco's markers API to set diagnostics
                     function validateFormula() {
                       const model = editor.getModel();
@@ -1342,6 +1673,9 @@
                       
                       const diagnostics = diagnosticsProvider.provideDiagnostics(model, null);
                       monaco.editor.setModelMarkers(model, 'formula-validator', diagnostics.markers);
+                      
+                      // Update messages pane with diagnostics
+                      updateMessagesPane(diagnostics.markers);
                     }
                     
                     // Validate on content change (with debounce for performance)
@@ -1352,6 +1686,9 @@
                         validateFormula();
                       }, 300); // Debounce validation to avoid performance issues
                     });
+                    
+                    // Initial validation to set up messages pane
+                    validateFormula();
                     
                     // Auto-capitalize function names (unless inside quotes)
                     let capitalizeTimeout;
@@ -1365,14 +1702,14 @@
                         if (!model) return;
                         
                         const position = editor.getPosition();
-                        if (!position || position.lineNumber < 2) return; // Skip line 1
+                        if (!position) return;
                         
-                        // Get current line (skip line 1, so get line 2+)
+                        // Get current line
                         const allLines = model.getValue().split('\n');
-                        if (allLines.length < 2) return;
+                        if (allLines.length < 1) return;
                         
                         const currentLineIndex = position.lineNumber - 1;
-                        if (currentLineIndex < 1) return; // Skip line 1
+                        // Line 1 is now valid
                         
                         const currentLine = allLines[currentLineIndex];
                         const textBeforeCursor = currentLine.substring(0, position.column - 1);
@@ -1713,8 +2050,7 @@
                     if (!model) return;
                     
                     const position = editor.getPosition();
-                    if (!position || position.lineNumber < 2) {
-                      // Skip line 1, use default Tab behavior
+                    if (!position) {
                       return;
                     }
                     
@@ -1734,187 +2070,61 @@
                       }
                     }
                     
-                    // IntelliSense is NOT showing - handle Tab for our custom completions
-                    // Get current line
-                    const currentLine = model.getLineContent(position.lineNumber);
-                    const textBeforeCursor = currentLine.substring(0, position.column - 1);
-                    const textAfterCursor = currentLine.substring(position.column - 1);
-                    
-                    // Check if we're in a function call (case-insensitive)
-                    const functionCallPattern = /\b([A-Za-z]+\w*)\s*\([^)]*$/i;
-                    const functionMatch = textBeforeCursor.match(functionCallPattern);
-                    
-                    if (functionMatch) {
-                      const openParens = (textBeforeCursor.match(/\(/g) || []).length;
-                      const closeParens = (textBeforeCursor.match(/\)/g) || []).length;
-                      const hasUnclosedParens = openParens > closeParens;
-                      
-                      if (hasUnclosedParens) {
-                        // Patterns: after string literal, number, cell reference, expression, or closing parenthesis
-                        // Note: Single quotes are reserved by Excel for sheet names, so only check double quotes for strings
-                        const afterStringPattern = /"[^"]*"\s*$/;
-                        const afterNumberPattern = /(\d+(\.\d+)?)\s*$/;
-                        const afterCellRefPattern = /([A-Z]+\$?\d+\$?)\s*$/i;
-                        const afterExpressionPattern = /([A-Z]+\$?\d+\$?|\d+|"[^"]*")\s*[+\-*/=<>!]+\s*([A-Z]+\$?\d+\$?|\d+|"[^"]*")\s*$/i;
-                        const afterClosingParenPattern = /\)\s*$/;
-                        
-                        // Check if we need a comma (after a complete argument)
-                        const needsComma = afterStringPattern.test(textBeforeCursor) || 
-                                          afterNumberPattern.test(textBeforeCursor) || 
-                                          afterCellRefPattern.test(textBeforeCursor) ||
-                                          afterExpressionPattern.test(textBeforeCursor) ||
-                                          afterClosingParenPattern.test(textBeforeCursor);
-                        
-                        if (needsComma) {
-                          // Insert comma with space (no popup)
-                          editor.executeEdits('tab-comma', [{
-                            range: new monaco.Range(position.lineNumber, position.column, position.lineNumber, position.column),
-                            text: ', '
-                          }]);
-                          return;
-                        }
-                        
-                        // Check if we need a closing parenthesis
-                        const functionCallText = textBeforeCursor.substring(functionMatch.index);
-                        const argsMatch = functionCallText.match(/\((.+)$/);
-                        
-                        if (argsMatch) {
-                          const args = argsMatch[1];
-                          const argCount = (args.match(/,/g) || []).length + 1;
-                          const trimmedArgs = args.trim();
-                          
-                          // Check if we're at the end of a complete argument
-                          // Note: Single quotes are reserved by Excel for sheet names
-                          const endsWithCompleteArg = /([A-Z]+\$?\d+\$?|\d+|"[^"]*"|\))\s*[+\-*/=<>!]+\s*([A-Z]+\$?\d+\$?|\d+|"[^"]*")\s*$/i.test(trimmedArgs) ||
-                                                      /([A-Z]+\$?\d+\$?|\d+|"[^"]*"|\))\s*$/i.test(trimmedArgs);
-                          
-                          const hasClosingParen = textAfterCursor.trim().startsWith(')');
-                          
-                          // If we have at least one complete argument and no closing paren, insert it
-                          if (endsWithCompleteArg && argCount >= 1 && !hasClosingParen) {
-                            // Insert closing parenthesis (no popup)
-                            editor.executeEdits('tab-close-paren', [{
-                              range: new monaco.Range(position.lineNumber, position.column, position.lineNumber, position.column),
-                              text: ')'
-                            }]);
-                            return;
-                          }
-                        }
+                    // IntelliSense is NOT showing - insert 4 spaces
+                    editor.executeEdits('tab-indent', [{
+                      range: new monaco.Range(position.lineNumber, position.column, position.lineNumber, position.column),
+                      text: '    ' // 4 spaces
+                    }]);
+                  });
+                  
+                  // Ensure Enter always goes to a new line and never accepts suggestions
+                  editor.addCommand(monaco.KeyCode.Enter, () => {
+                    // Check if suggestions are visible
+                    const suggestController = editor.getContribution('suggestController');
+                    if (suggestController && suggestController.widget && suggestController.widget.value) {
+                      const widget = suggestController.widget.value;
+                      // If IntelliSense is showing, explicitly cancel it
+                      if (widget && typeof widget.isOpen === 'function' && widget.isOpen()) {
+                        widget.cancel(); // Close IntelliSense
                       }
                     }
-                    
-                    // Default Tab behavior - complete function names or trigger suggestions
-                    // First, check if we're typing a function name that should be completed
-                    const word = model.getWordUntilPosition(position);
-                    const wordMatch = textBeforeCursor.match(/([A-Za-z_][A-Za-z0-9_]*)$/i);
-                    const actualWord = wordMatch ? wordMatch[1] : word.word;
-                    
-                    if (actualWord && actualWord.length >= 1) {
-                      const isCellReference = /^[A-Z]{1,3}\$?\d+\$?$/i.test(actualWord);
-                      if (!isCellReference) {
-                        // Check if this matches a function name exactly (case-insensitive)
-                        if (window.hyperFormulaFunctions && window.hyperFormulaFunctions.length > 0) {
-                          const wordUpper = actualWord.toUpperCase();
-                          const matchingFunction = window.hyperFormulaFunctions.find(func => 
-                            func.name.toUpperCase() === wordUpper
-                          );
-                          
-                          if (matchingFunction) {
-                            // Exact match found - insert the snippet directly using the snippet controller
-                            // This will properly activate snippet mode and show placeholders
-                            // The cursor will be positioned at the first placeholder (after opening paren)
-                            // Tab should then move to the next placeholder
-                            
-                            const wordStart = textBeforeCursor.length - actualWord.length;
-                            const correctRange = new monaco.Range(
-                              position.lineNumber,
-                              wordStart + 1,
-                              position.lineNumber,
-                              position.column
-                            );
-                            
-                            // Create snippet template from function signature
-                            // Example: IF(logical, value, value) -> IF(${1:logical}, ${2:value}, ${3:value})
-                            // Check if createFunctionSnippet is available
-                            if (!window.createFunctionSnippet) {
-                              console.error('createFunctionSnippet is not defined!');
-                              return;
-                            }
-                            
-                            const snippetTemplate = window.createFunctionSnippet(matchingFunction);
-                            
-                            if (!snippetTemplate) {
-                              console.error('Failed to create snippet template for function:', matchingFunction.name);
-                              return;
-                            }
-                            
-                            console.log('Tab: Inserting snippet for function', matchingFunction.name);
-                            console.log('Snippet template:', snippetTemplate);
-                            
-                            // Use Monaco's snippet controller to insert the snippet
-                            // This will properly activate snippet mode and show placeholders
-                            window.isProgrammaticCursorChange = true;
-                            
-                            // Select the function name to replace with snippet
-                            editor.setSelection(correctRange);
-                            
-                            // Insert the snippet using Monaco's SnippetController2
-                            // This will properly activate snippet mode and show placeholders
-                            // The cursor will be positioned at the first placeholder (${1:logical})
-                            try {
-                              // Use Monaco's SnippetController2 to insert the snippet
-                              // This will replace the selection with the snippet and activate snippet mode
-                              const snippetController = editor.getContribution('snippetController2');
-                              if (snippetController) {
-                                // Select the function name to replace
-                                editor.setSelection(correctRange);
-                                // Insert the snippet - this automatically activates snippet mode
-                                snippetController.insert(snippetTemplate);
-                                console.log('Snippet inserted via SnippetController2');
-                              } else {
-                                throw new Error('SnippetController2 not available');
-                              }
-                            } catch (e) {
-                              console.error('SnippetController2.insert failed:', e);
-                              
-                              // Fallback: Use executeEdits to insert the snippet
-                              // Note: This won't activate snippet mode, but will at least insert the text
-                              editor.executeEdits('tab-complete-function', [{
-                                range: correctRange,
-                                text: snippetTemplate
-                              }]);
-                              
-                              console.warn('Snippet inserted without snippet mode (fallback)');
-                            }
-                            
-                            Promise.resolve().then(() => {
-                              window.isProgrammaticCursorChange = false;
-                            });
-                            
-                            return;
-                          }
-                        }
-                        
-                        // No exact match - trigger suggestions so user can choose
-                        editor.trigger('keyboard', 'editor.action.triggerSuggest', {});
-                        return;
+                    // Insert newline
+                    editor.trigger('keyboard', 'type', { text: '\n' });
+                  });
+                  
+                  // Prevent IntelliSense popup when F8 is pressed (used for navigating to next problem)
+                  editor.addCommand(monaco.KeyCode.F8, () => {
+                    // Check if suggestions are visible and close them
+                    const suggestController = editor.getContribution('suggestController');
+                    if (suggestController && suggestController.widget && suggestController.widget.value) {
+                      const widget = suggestController.widget.value;
+                      if (widget && typeof widget.isOpen === 'function' && widget.isOpen()) {
+                        widget.cancel(); // Close IntelliSense if open
                       }
                     }
+                    // Prevent IntelliSense from opening by temporarily disabling quick suggestions
+                    // Store original setting
+                    const originalQuickSuggestions = editor.getOption(monaco.editor.EditorOption.quickSuggestions);
+                    // Temporarily disable quick suggestions
+                    editor.updateOptions({ quickSuggestions: false });
+                    // Use setTimeout to re-enable after a brief moment (after F8 navigation completes)
+                    setTimeout(() => {
+                      editor.updateOptions({ quickSuggestions: originalQuickSuggestions });
+                    }, 100);
+                    // Let Monaco handle F8 navigation (go to next problem)
+                    // Return undefined to allow default F8 behavior
+                    return;
                   });
                   
                   // Set up Ctrl+Enter command after editor is created
+                  // Ctrl+Enter executes the formula but stays in edit mode
                   editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, () => {
                     const cell = window.selectedCell;
                     if (cell && !editor.getOption(monaco.editor.EditorOption.readOnly)) {
-                      // Get all lines and skip line 1 (the "=" visual indicator line)
+                      // Get all lines from editor
                       const allLines = editor.getValue().split('\n');
-                      if (allLines.length < 2) {
-                        // No formula entered, just empty line 1
-                        return;
-                      }
-                      
-                      // Get formula starting from line 2, join and trim
-                      let formula = allLines.slice(1).join('\n').trim();
+                      // Get formula from all lines, join and trim
+                      let formula = allLines.join('\n').trim();
                       
                       // Add "=" prefix if missing (required for HyperFormula)
                       if (formula && !formula.startsWith("=")) {
@@ -1935,15 +2145,33 @@
                         }
                       }
                       
-                      // Exit edit mode after saving (remove pattern background)
-                      isEditMode = false;
-                      if (cell) {
-                        cell.classList.remove("edit-mode");
-                      }
+                      // Stay in edit mode after saving (don't exit)
+                      // Only Escape key exits edit mode
                     }
                   });
                   window.monacoEditor = editor;
                   console.log("Monaco Editor created successfully", editor);
+                  
+                  // Add click listener to Monaco editor to enter edit mode when clicked
+                  const editorDomNode = editor.getDomNode();
+                  if (editorDomNode) {
+                    editorDomNode.addEventListener('click', (e) => {
+                      // Only enter edit mode if a cell is selected
+                      if (window.selectedCell && !isEditMode) {
+                        // Get click position before entering edit mode
+                        let targetPosition = null;
+                        try {
+                          targetPosition = editor.getTargetAtClientPoint(e.clientX, e.clientY);
+                        } catch (err) {
+                          // Fallback if getTargetAtClientPoint fails
+                        }
+                        
+                        // Enter edit mode, passing the click position
+                        // This will handle cursor positioning based on whether there's content
+                        enterEditMode(window.selectedCell, targetPosition);
+                      }
+                    });
+                  }
                 } catch (monacoError) {
                   console.error("Failed to initialize Monaco Editor:", monacoError);
                 }
@@ -1961,15 +2189,9 @@
           let isEditMode = false;
           window.selectedCell = null;
           
-          // Helper function to ensure editor value has 7 lines with empty first line
+          // Helper function to ensure editor value has 7 lines
           function ensureSevenLines(value) {
             const lines = value.split('\n');
-            // Ensure first line is empty (for the "=" visual indicator)
-            if (lines.length === 0) {
-              lines[0] = "";
-            } else {
-              lines[0] = ""; // Always keep first line empty
-            }
             // Ensure we have 7 lines total
             while (lines.length < 7) {
               lines.push('');
@@ -1978,7 +2200,7 @@
           }
           
           // Function to enter edit mode for a cell
-          function enterEditMode(cell) {
+          function enterEditMode(cell, clickPosition) {
             if (!cell) return;
             
             // Don't enter edit mode for headers
@@ -1987,6 +2209,12 @@
             
             // Set edit mode flag first
             isEditMode = true;
+            
+            // Add edit-mode class to editor-wrapper for styling
+            const editorWrapper = document.querySelector('.editor-wrapper');
+            if (editorWrapper) {
+              editorWrapper.classList.add('editor-edit-mode');
+            }
             
             // Select the cell visually (but don't rely on selectCell for editor setup)
             clearSelection();
@@ -2022,7 +2250,7 @@
                       editorValue = cellFormula;
                     }
                   } catch (e) {
-                    editorValue = "";
+              editorValue = "";
                   }
                 }
               }
@@ -2031,12 +2259,52 @@
             // Set up the editor directly
             const currentEditor = window.monacoEditor || editor;
             if (currentEditor && typeof currentEditor.setValue === 'function') {
-              // First line is empty (visual indicator), formula starts on line 2
-              const fullValue = ensureSevenLines("\n" + (editorValue || ""));
+              // Check if editor is empty (no formula content)
+              const model = currentEditor.getModel();
+              let isEditorEmpty = true;
+              if (model) {
+                const currentValue = model.getValue();
+                const currentLines = currentValue.split('\n');
+                // Check if there's any content
+                isEditorEmpty = !currentLines.some(line => line.trim().length > 0);
+              }
+              
+              // Formula starts on line 1
+              const fullValue = ensureSevenLines(editorValue || "");
               
               // Calculate target cursor position
-              const line2Content = (editorValue || "").split('\n')[0] || "";
-              const targetColumn = Math.max(1, line2Content.length + 1);
+              let targetLine = 1;
+              let targetColumn = 1;
+              
+              // If click position was provided and there's existing content, use clicked position
+              if (clickPosition && clickPosition.position && !isEditorEmpty) {
+                targetLine = clickPosition.position.lineNumber;
+                targetColumn = clickPosition.position.column;
+              } else if (editorValue && editorValue.trim().length > 0) {
+                // If there's formula content, cursor should be at the end
+                const formulaLines = editorValue.split('\n');
+                const lastLine = formulaLines[formulaLines.length - 1] || "";
+                targetLine = formulaLines.length > 0 ? formulaLines.length : 1;
+                targetColumn = Math.max(1, lastLine.length + 1);
+              } else if (!isEditorEmpty) {
+                // Editor has content but no formula for this cell - keep cursor at end of existing content
+                if (model) {
+                  const currentValue = model.getValue();
+                  const currentLines = currentValue.split('\n');
+                  // Find last line with content
+                  for (let i = currentLines.length - 1; i >= 0; i--) {
+                    if (currentLines[i].trim().length > 0) {
+                      targetLine = i + 1; // +1 because Monaco uses 1-based line numbers
+                      targetColumn = Math.max(1, currentLines[i].length + 1);
+                      break;
+                    }
+                  }
+                }
+              } else {
+                // Editor is empty - start at line 1, column 1
+                targetLine = 1;
+                targetColumn = 1;
+              }
               
               // Set programmatic flag BEFORE setValue to prevent event listener from interfering
               window.isProgrammaticCursorChange = true;
@@ -2045,10 +2313,13 @@
               currentEditor.setValue(fullValue);
               
               // Make editor editable BEFORE setting cursor position
-              currentEditor.updateOptions({ readOnly: false });
+              currentEditor.updateOptions({ 
+                readOnly: false,
+                cursorBlinking: 'blink' // Show cursor in edit mode
+              });
               
               // Set cursor position immediately
-              currentEditor.setPosition({ lineNumber: 2, column: targetColumn });
+              currentEditor.setPosition({ lineNumber: targetLine, column: targetColumn });
               
               // Focus the editor immediately - this is critical for edit mode
               currentEditor.focus();
@@ -2062,13 +2333,8 @@
               setTimeout(() => {
                 if (currentEditor && typeof currentEditor.focus === 'function') {
                   currentEditor.focus();
-                  // Ensure cursor is still on line 2
-                  const model = currentEditor.getModel();
-                  if (model) {
-                    const line2Content = model.getLineContent(2);
-                    const col = Math.max(1, line2Content.length + 1);
-                    currentEditor.setPosition({ lineNumber: 2, column: col });
-                  }
+                  // Ensure cursor is at the correct position
+                  currentEditor.setPosition({ lineNumber: targetLine, column: targetColumn });
                 }
               }, 50);
             }
@@ -2128,7 +2394,39 @@
                 const display = cell.querySelector(".grid-cell-display");
                 if (display) {
                   // Show the calculated result (without "=" prefix)
-                  display.textContent = cellValue !== null && cellValue !== undefined ? cellValue.toString() : "";
+                  const displayValue = cellValue !== null && cellValue !== undefined ? cellValue.toString() : "";
+                  display.textContent = displayValue;
+                  
+                  // Determine if value is a number or date (right-align) vs text (left-align)
+                  let isNumber = false;
+                  if (cellValue !== null && cellValue !== undefined && displayValue !== '') {
+                    // Check if it's a JavaScript number type
+                    if (typeof cellValue === 'number') {
+                      isNumber = true;
+                    } else {
+                      // Check if string represents a number (including dates which are serial numbers)
+                      const numValue = parseFloat(displayValue);
+                      if (!isNaN(numValue) && isFinite(numValue) && displayValue.trim() !== '') {
+                        // Additional check: if it's a valid number string
+                        const trimmed = displayValue.trim();
+                        // Match numbers: integers, decimals, scientific notation, but not text that starts with numbers
+                        if (/^-?\d+\.?\d*([eE][+-]?\d+)?$/.test(trimmed)) {
+                          isNumber = true;
+                        }
+                      }
+                    }
+                  }
+                  
+                  // Apply alignment: right for numbers/dates, left for text
+                  if (isNumber) {
+                    display.style.textAlign = 'right';
+                    cell.classList.add('cell-numeric');
+                    cell.classList.remove('cell-text');
+                  } else {
+                    display.style.textAlign = 'left';
+                    cell.classList.add('cell-text');
+                    cell.classList.remove('cell-numeric');
+                  }
                 }
               }
             } catch (error) {
@@ -2344,6 +2642,14 @@
             });
             selectedCells.clear();
             
+            // Remove edit-mode class from editor-wrapper when clearing selection
+            if (!isEditMode) {
+              const editorWrapper = document.querySelector('.editor-wrapper');
+              if (editorWrapper) {
+                editorWrapper.classList.remove('editor-edit-mode');
+              }
+            }
+            
             // Hide selection overlay and fill handle
             const overlay = document.getElementById("selectionOverlay");
             if (overlay) {
@@ -2473,33 +2779,51 @@
                 
                 const currentEditor = window.monacoEditor || editor;
                 if (currentEditor) {
-                  // First line is empty (visual indicator), formula starts on line 2
-                  const fullValue = "\n" + (editorValue || "");
+                  // Formula starts on line 1
+                  const fullValue = ensureSevenLines(editorValue || "");
                   
                   // Calculate target cursor position before setting value
-                  const line2Content = (editorValue || "").split('\n')[0] || "";
-                  const targetColumn = Math.max(1, line2Content.length + 1);
+                  const line1Content = (editorValue || "").split('\n')[0] || "";
+                  const targetColumn = Math.max(1, line1Content.length + 1);
+                  
+                  // Remove edit-mode class from editor-wrapper to show 30% opacity when just selecting
+                  const editorWrapper = document.querySelector('.editor-wrapper');
+                  if (editorWrapper && !isEditMode) {
+                    editorWrapper.classList.remove('editor-edit-mode');
+                  }
                   
                   // Set programmatic flag BEFORE setValue to prevent event listener from interfering
                   window.isProgrammaticCursorChange = true;
                   
                   // Set value
-                  currentEditor.setValue(ensureSevenLines(fullValue));
+                  currentEditor.setValue(fullValue);
                   
-                  // Set cursor to line 2 immediately and synchronously
-                  currentEditor.setPosition({ lineNumber: 2, column: targetColumn });
+                  // Set cursor to line 1 immediately and synchronously
+                  currentEditor.setPosition({ lineNumber: 1, column: targetColumn });
                   
                   // Reset flag after a microtask to allow normal cursor behavior
                   Promise.resolve().then(() => {
                     window.isProgrammaticCursorChange = false;
                   });
                   
-                  currentEditor.updateOptions({ readOnly: false });
+                  currentEditor.updateOptions({ 
+                    readOnly: !isEditMode,
+                    cursorBlinking: isEditMode ? 'blink' : 'hidden'
+                  });
                 }
               } else {
                 const currentEditor = window.monacoEditor || editor;
                 if (currentEditor) {
-                  currentEditor.updateOptions({ readOnly: true });
+                  // Remove edit-mode class from editor-wrapper to show 30% opacity when just selecting
+                  const editorWrapper = document.querySelector('.editor-wrapper');
+                  if (editorWrapper && !isEditMode) {
+                    editorWrapper.classList.remove('editor-edit-mode');
+                  }
+                  
+                  currentEditor.updateOptions({ 
+                    readOnly: true,
+                    cursorBlinking: 'hidden' // Hide cursor in selection mode
+                  });
                 }
               }
               window.selectedCell = firstCell;
@@ -2605,37 +2929,36 @@
               
               const currentEditor = window.monacoEditor || editor;
               if (currentEditor && typeof currentEditor.setValue === 'function') {
-                // First line is empty (visual indicator), formula starts on line 2
-                const fullValue = ensureSevenLines("\n" + (editorValue || ""));
+                // Formula starts on line 1
+                const fullValue = ensureSevenLines(editorValue || "");
                 
                 // Calculate target cursor position
-                const line2Content = (editorValue || "").split('\n')[0] || "";
-                const targetColumn = Math.max(1, line2Content.length + 1);
+                const line1Content = (editorValue || "").split('\n')[0] || "";
+                const targetColumn = Math.max(1, line1Content.length + 1);
+                const targetLine = 1;
                 
                 // Set programmatic flag BEFORE setValue to prevent event listener from interfering
                 window.isProgrammaticCursorChange = true;
                 
-                // Get model for atomic operation
-                const model = currentEditor.getModel();
+                // Remove edit-mode class from editor-wrapper to show 30% opacity when just selecting
+                // This applies to cells with any content (formula or value)
+                const editorWrapper = document.querySelector('.editor-wrapper');
+                if (editorWrapper && !isEditMode) {
+                  editorWrapper.classList.remove('editor-edit-mode');
+                }
                 
-                if (model) {
-                  // Use executeEdits to atomically set value and cursor position
-                  // This prevents the visible jump from line 1 to line 2
-                  currentEditor.executeEdits('setCellValue', [
-                    {
-                      range: model.getFullModelRange(),
-                      text: fullValue
-                    }
-                  ], [
-                    {
-                      range: new monaco.Range(2, targetColumn, 2, targetColumn),
-                      selection: new monaco.Range(2, targetColumn, 2, targetColumn)
-                    }
-                  ]);
+                // Set the value directly using setValue
+                // This is more reliable than executeEdits
+                currentEditor.setValue(fullValue);
+                
+                // Set cursor position after setting value
+                if (window.monaco && window.monaco.Range) {
+                  currentEditor.setPosition({ lineNumber: targetLine, column: targetColumn });
                 } else {
-                  // Fallback: set value and cursor separately
-                  currentEditor.setValue(fullValue);
-                  currentEditor.setPosition({ lineNumber: 2, column: targetColumn });
+                  // Fallback if monaco isn't loaded yet
+                  setTimeout(() => {
+                    currentEditor.setPosition({ lineNumber: targetLine, column: targetColumn });
+                  }, 0);
                 }
                 
                 // Reset flag after operations complete
@@ -2643,7 +2966,10 @@
                   window.isProgrammaticCursorChange = false;
                 });
                 
-                currentEditor.updateOptions({ readOnly: false });
+                currentEditor.updateOptions({ 
+                  readOnly: !isEditMode, // Read-only when not in edit mode
+                  cursorBlinking: isEditMode ? 'blink' : 'hidden' // Show cursor only in edit mode
+                });
                 
                 // Don't auto-focus in selection mode - only in edit mode
                 // Monaco Editor doesn't have blur(), so we just don't focus
@@ -2654,7 +2980,10 @@
             } else {
               const currentEditor = window.monacoEditor || editor;
               if (currentEditor) {
-                currentEditor.updateOptions({ readOnly: true });
+                currentEditor.updateOptions({ 
+                  readOnly: true,
+                  cursorBlinking: 'hidden' // Hide cursor in selection mode
+                });
               }
             }
             updateCellRangePill();
@@ -2672,16 +3001,76 @@
             }
           });
           
-          // Exit edit mode when clicking outside or pressing Escape
+          // Handle keydown events
           document.addEventListener("keydown", (e) => {
+            // Exit edit mode when pressing Escape
             if (e.key === "Escape" && isEditMode) {
               isEditMode = false;
+              
+              const currentEditor = window.monacoEditor || editor;
+              
+              // Get the last saved formula from the selected cell
+              let lastSavedFormula = "";
+              if (window.selectedCell) {
+                const storedFormula = window.selectedCell.getAttribute("data-formula") || "";
+                // Strip "=" prefix when displaying in editor
+                if (storedFormula && storedFormula.startsWith("=")) {
+                  lastSavedFormula = storedFormula.substring(1);
+                } else if (storedFormula) {
+                  lastSavedFormula = storedFormula;
+                }
+              }
+              
+              // Restore the last saved formula (or clear if none exists)
+              if (currentEditor && typeof currentEditor.setValue === 'function') {
+                const fullValue = ensureSevenLines(lastSavedFormula || "");
+                currentEditor.setValue(fullValue);
+              }
+              
               // Remove edit-mode class from selected cell when exiting edit mode
               if (window.selectedCell) {
                 window.selectedCell.classList.remove("edit-mode");
               }
+              
+              // Remove edit-mode class from editor-wrapper
+              const editorWrapper = document.querySelector('.editor-wrapper');
+              if (editorWrapper) {
+                editorWrapper.classList.remove('editor-edit-mode');
+              }
+              
+              // Hide cursor when leaving edit mode
+              if (currentEditor && typeof currentEditor.updateOptions === 'function') {
+                currentEditor.updateOptions({ cursorBlinking: 'hidden' });
+              }
+              
               // Monaco Editor doesn't have blur(), just exit edit mode
               // The editor will remain but won't be focused
+              return;
+            }
+            
+            // Enter edit mode when user starts typing and a cell is selected
+            // Only if we're not already in edit mode and not already focused in the editor
+            const currentEditor = window.monacoEditor || editor;
+            const isEditorFocused = currentEditor && document.activeElement === currentEditor.getDomNode();
+            
+            // Check if a printable character is being typed (not modifiers, arrows, etc.)
+            const isPrintableChar = e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey;
+            
+            // Don't trigger on special keys
+            const isSpecialKey = ['Tab', 'Enter', 'Escape', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Home', 'End', 'PageUp', 'PageDown', 'Delete', 'Backspace', 'Insert', 'F1', 'F2', 'F3', 'F4', 'F5', 'F6', 'F7', 'F8', 'F9', 'F10', 'F11', 'F12'].includes(e.key);
+            
+            if (window.selectedCell && !isEditMode && !isEditorFocused && isPrintableChar && !isSpecialKey) {
+              // User started typing - enter edit mode
+              e.preventDefault(); // Prevent default behavior
+              enterEditMode(window.selectedCell);
+              
+              // Insert the typed character after entering edit mode
+              setTimeout(() => {
+                if (currentEditor && typeof currentEditor.trigger === 'function') {
+                  // Trigger type action to insert the character
+                  currentEditor.trigger('keyboard', 'type', { text: e.key });
+                }
+              }, 50);
             }
           });
           
@@ -2989,6 +3378,13 @@
                   clickTimeout = setTimeout(() => {
                     if (clickCount === 1 && !isSelecting) {
                       isEditMode = false;
+                      
+                      // Remove edit-mode class from editor-wrapper when entering selection mode
+                      const editorWrapper = document.querySelector('.editor-wrapper');
+                      if (editorWrapper) {
+                        editorWrapper.classList.remove('editor-edit-mode');
+                      }
+                      
                       selectCell(cell);
                     }
                     clickCount = 0;
@@ -3189,11 +3585,14 @@
             const headerHeight = 22; // Height of collapsed pane
             const expandedHeight = formulaEditorHeight * 0.4; // 40% of formula editor
             
-            if (pane.classList.contains('collapsed')) {
-              pane.style.height = `${headerHeight}px`;
-            } else {
-              pane.style.height = `${expandedHeight}px`;
-            }
+            // Use requestAnimationFrame to ensure smooth animation
+            requestAnimationFrame(() => {
+              if (pane.classList.contains('collapsed')) {
+                pane.style.height = `${headerHeight}px`;
+              } else {
+                pane.style.height = `${expandedHeight}px`;
+              }
+            });
           }
           
           // Update pane heights on resize
@@ -3217,11 +3616,18 @@
           window.addEventListener('resize', updateAllPaneHeights);
           
           // Initial update - set all panes to collapsed state
+          // Disable transitions on initial load to prevent animation
           document.querySelectorAll('.sliding-pane').forEach(pane => {
             if (!pane.classList.contains('collapsed')) {
               pane.classList.add('collapsed');
             }
+            // Temporarily disable transition for initial setup
+            pane.style.transition = 'none';
             pane.style.height = '22px';
+            // Re-enable transition after a brief delay
+            requestAnimationFrame(() => {
+              pane.style.transition = '';
+            });
           });
         } catch (error) {
           console.error("Error initializing app:", error);
