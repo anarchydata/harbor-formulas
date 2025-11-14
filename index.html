@@ -257,7 +257,7 @@
                     inherit: true,
                     rules: [
                       { token: "", foreground: "D4D4D4" }, // Default text color
-                      { token: "comment", foreground: "6A9955", fontStyle: "italic" },
+                      { token: "comment", foreground: "858585", fontStyle: "italic" }, // Soft grey for comments
                       { token: "keyword", foreground: "569CD6" },
                       { token: "string", foreground: "D19A66" },
                       { token: "string.escape", foreground: "D19A66" },
@@ -339,6 +339,10 @@
                   monaco.languages.setMonarchTokensProvider("excel-formula", {
                     tokenizer: {
                       root: [
+                        // Block comments (/* ... */)
+                        [/\/\*/, "comment", "@comment"],
+                        // Inline comments (// to end of line)
+                        [/\/\/.*$/, "comment"],
                         // Cell references (e.g., A1, B2, $A$1, Sheet1!A1)
                         [/[A-Z]+\$?[0-9]+\$?|'[^']*'![A-Z]+\$?[0-9]+\$?/, "cell-reference"],
                           // Functions - use all HyperFormula function names
@@ -358,6 +362,12 @@
                         [/\s+/, ""],
                         // Everything else
                         [/./, ""]
+                      ],
+                      comment: [
+                        // End of block comment
+                        [/\*\//, "comment", "@pop"],
+                        // Continue in comment (any character)
+                        [/./, "comment"]
                       ]
                     }
                     });
@@ -990,9 +1000,15 @@
                         const lines = text.split('\n');
                         if (lines.length < 1) return { markers: [] };
                         
-                        // Get formula from all lines
-                        const formulaText = lines.join('\n').trim();
-                        if (!formulaText) return { markers: [] };
+                        // Get formula from all lines and strip comments (both inline // and block /* */)
+                        // Use the stripComments helper function for consistency
+                        const fullText = lines.join('\n');
+                        const formulaWithoutComments = stripComments(fullText);
+                        
+                        if (!formulaWithoutComments) return { markers: [] };
+                        
+                        // Use formula without comments for validation
+                        const formulaText = formulaWithoutComments;
                         
                         // Check for common syntax errors
                         // 1. Check for unclosed string quotes
@@ -2179,6 +2195,9 @@
                       // Get formula from all lines, join and trim
                       let formula = allLines.join('\n').trim();
                       
+                      // Strip comments before executing
+                      formula = stripComments(formula);
+                      
                       // Add "=" prefix if missing (required for HyperFormula)
                       if (formula && !formula.startsWith("=")) {
                         formula = "=" + formula;
@@ -2261,6 +2280,90 @@
               lines.push('');
             }
             return lines.slice(0, 7).join('\n');
+          }
+          
+          // Helper function to strip comments from formula text
+          // Supports both inline comments (// to end of line) and block comments (/* ... */)
+          // Comments are only recognized if not inside a string
+          function stripComments(formulaText) {
+            if (!formulaText) return formulaText;
+            
+            let result = '';
+            let inString = false;
+            let inBlockComment = false;
+            let inInlineComment = false;
+            let escaped = false;
+            
+            for (let i = 0; i < formulaText.length; i++) {
+              const char = formulaText[i];
+              const nextChar = i < formulaText.length - 1 ? formulaText[i + 1] : '';
+              const prevChar = i > 0 ? formulaText[i - 1] : '';
+              
+              if (escaped) {
+                // Inside an escape sequence
+                escaped = false;
+                if (!inBlockComment && !inInlineComment) {
+                  result += char;
+                }
+                continue;
+              }
+              
+              if (char === '\\') {
+                escaped = true;
+                if (!inBlockComment && !inInlineComment) {
+                  result += char;
+                }
+                continue;
+              }
+              
+              // Handle string delimiters
+              if (char === '"' && !inBlockComment && !inInlineComment) {
+                inString = !inString;
+                result += char;
+                continue;
+              }
+              
+              // Skip processing if inside a string
+              if (inString) {
+                result += char;
+                continue;
+              }
+              
+              // Handle block comment start (/*)
+              if (!inBlockComment && !inInlineComment && char === '/' && nextChar === '*') {
+                inBlockComment = true;
+                i++; // Skip the '*' character
+                continue;
+              }
+              
+              // Handle block comment end (*/)
+              if (inBlockComment && char === '*' && nextChar === '/') {
+                inBlockComment = false;
+                i++; // Skip the '/' character
+                continue;
+              }
+              
+              // Handle inline comment start (//)
+              if (!inBlockComment && !inInlineComment && char === '/' && nextChar === '/') {
+                inInlineComment = true;
+                i++; // Skip the second '/' character
+                continue;
+              }
+              
+              // Handle newline - ends inline comment
+              if (char === '\n' && inInlineComment) {
+                inInlineComment = false;
+                result += char;
+                continue;
+              }
+              
+              // Add character to result if not in any comment
+              if (!inBlockComment && !inInlineComment) {
+                result += char;
+              }
+            }
+            
+            return result.trim();
           }
           
           // Function to enter edit mode for a cell
@@ -2379,7 +2482,8 @@
               // Make editor editable BEFORE setting cursor position
               currentEditor.updateOptions({ 
                 readOnly: false,
-                cursorBlinking: 'blink' // Show cursor in edit mode
+                cursorBlinking: 'blink', // Show cursor in edit mode
+                cursorStyle: 'line' // Ensure cursor is visible
               });
               
               // Set cursor position immediately
@@ -2590,9 +2694,10 @@
               // First sheet is always at index 0
               const sheetId = 0;
               
-              // Use value as-is if it already has "=" or is empty
-              // The Ctrl+Enter handler should have already added "=" if needed
-              let formulaToStore = value;
+              // Strip comments from formula before storing and executing
+              // Comments are already stripped in Ctrl+Enter handler, but this ensures
+              // comments are removed even if setCellValue is called directly
+              let formulaToStore = stripComments(value);
               
               // Set the value in HyperFormula - address object uses col, row, sheet order
               window.hf.setCellContents({ col, row, sheet: sheetId }, [[formulaToStore]]);
@@ -3032,13 +3137,22 @@
                 
                 currentEditor.updateOptions({ 
                   readOnly: !isEditMode, // Read-only when not in edit mode
-                  cursorBlinking: isEditMode ? 'blink' : 'hidden' // Show cursor only in edit mode
+                  cursorBlinking: isEditMode ? 'blink' : 'hidden', // Show cursor only in edit mode
+                  cursorStyle: 'line'
                 });
                 
                 // Don't auto-focus in selection mode - only in edit mode
-                // Monaco Editor doesn't have blur(), so we just don't focus
+                // Also blur and ensure cursor is hidden when not in edit mode
                 if (isEditMode && typeof currentEditor.focus === 'function') {
                   currentEditor.focus();
+                } else if (!isEditMode) {
+                  // Blur the editor to ensure cursor is completely hidden
+                  // Also force cursor to be hidden via CSS (handled in styles.css)
+                  if (typeof currentEditor.blur === 'function') {
+                    currentEditor.blur();
+                  }
+                  // Force update to ensure cursor is hidden
+                  currentEditor.render(true);
                 }
               }
             } else {
@@ -3048,6 +3162,11 @@
                   readOnly: true,
                   cursorBlinking: 'hidden' // Hide cursor in selection mode
                 });
+                // Blur and force re-render to ensure cursor is hidden
+                if (typeof currentEditor.blur === 'function') {
+                  currentEditor.blur();
+                }
+                currentEditor.render(true);
               }
             }
             updateCellRangePill();
@@ -3102,9 +3221,18 @@
                 editorWrapper.classList.remove('editor-edit-mode');
               }
               
-              // Hide cursor when leaving edit mode
+              // Hide cursor completely when leaving edit mode
               if (currentEditor && typeof currentEditor.updateOptions === 'function') {
-                currentEditor.updateOptions({ cursorBlinking: 'hidden' });
+                currentEditor.updateOptions({ 
+                  cursorBlinking: 'hidden',
+                  cursorStyle: 'line'
+                });
+                // Blur the editor and force re-render to hide cursor
+                if (typeof currentEditor.blur === 'function') {
+                  currentEditor.blur();
+                }
+                // Force re-render to ensure cursor is hidden
+                currentEditor.render(true);
               }
               
               // Monaco Editor doesn't have blur(), just exit edit mode
@@ -3482,6 +3610,20 @@
                       const editorWrapper = document.querySelector('.editor-wrapper');
                       if (editorWrapper) {
                         editorWrapper.classList.remove('editor-edit-mode');
+                      }
+                      
+                      // Hide cursor when leaving edit mode
+                      const currentEditor = window.monacoEditor || editor;
+                      if (currentEditor && typeof currentEditor.updateOptions === 'function') {
+                        currentEditor.updateOptions({ 
+                          cursorBlinking: 'hidden',
+                          cursorStyle: 'line'
+                        });
+                        // Blur and force re-render to hide cursor
+                        if (typeof currentEditor.blur === 'function') {
+                          currentEditor.blur();
+                        }
+                        currentEditor.render(true);
                       }
                       
                       selectCell(cell);
