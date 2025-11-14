@@ -254,6 +254,13 @@
           let isFormulaSelecting = false;
           let formulaSelectionStartCell = null;
           let formulaSelectionCurrentCell = null;
+          let selectedCells = new Set();
+          window.selectedCells = selectedCells;
+          let isSelecting = false;
+          let selectionStart = null;
+          let selectionAnchorCell = null;
+          let isEditMode = false;
+          window.selectedCell = null;
 
           function cancelFormulaSelection() {
             isFormulaSelecting = false;
@@ -309,9 +316,33 @@
           function updateGridHighlights(assignments = new Map()) {
             if (!gridBody) return;
 
+            const normalizedAssignments = new Map();
+            assignments.forEach((value, cellRef) => {
+              if (!cellRef) return;
+              if (value && typeof value === 'object') {
+                const normalizedInfo = {
+                  className: value.className || '',
+                  groupKey: value.groupKey || ''
+                };
+                normalizedAssignments.set(cellRef, normalizedInfo);
+              } else if (value) {
+                normalizedAssignments.set(cellRef, { className: value, groupKey: '' });
+              }
+            });
+
+            const groupMembership = new Map();
+            normalizedAssignments.forEach((info, cellRef) => {
+              const resolvedGroupKey = info.groupKey || cellRef;
+              info.groupKey = resolvedGroupKey;
+              if (!groupMembership.has(resolvedGroupKey)) {
+                groupMembership.set(resolvedGroupKey, new Set());
+              }
+              groupMembership.get(resolvedGroupKey).add(cellRef);
+            });
+
             const previousEntries = Array.from(chipHighlightedCells.entries());
             previousEntries.forEach(([cellRef, className]) => {
-              if (!assignments.has(cellRef)) {
+              if (!normalizedAssignments.has(cellRef)) {
                 const cell = gridBody.querySelector(`td[data-ref="${cellRef}"]`);
                 if (cell) {
                   cell.classList.remove('chip-selector');
@@ -324,18 +355,65 @@
               }
             });
 
-            assignments.forEach((className, cellRef) => {
+            if (!isEditMode) {
+              return;
+            }
+
+            const directions = [
+              { edge: 'top', deltaRow: -1, deltaCol: 0 },
+              { edge: 'bottom', deltaRow: 1, deltaCol: 0 },
+              { edge: 'left', deltaRow: 0, deltaCol: -1 },
+              { edge: 'right', deltaRow: 0, deltaCol: 1 }
+            ];
+            const allEdges = directions.map(d => d.edge);
+
+            function getEdgesForCell(cellRef, info) {
+              const address = cellRefToAddress(cellRef);
+              if (!address) {
+                return allEdges;
+              }
+              const [row, col] = address;
+              const groupCells = groupMembership.get(info.groupKey);
+              if (!groupCells || groupCells.size <= 1) {
+                return allEdges;
+              }
+
+              const edges = [];
+              directions.forEach(({ edge, deltaRow, deltaCol }) => {
+                const neighborRow = row + deltaRow;
+                const neighborCol = col + deltaCol;
+                if (neighborRow < 0 || neighborCol < 0) {
+                  edges.push(edge);
+                  return;
+                }
+                const neighborRef = addressToCellRef(neighborRow, neighborCol);
+                if (!neighborRef || !groupCells.has(neighborRef)) {
+                  edges.push(edge);
+                }
+              });
+
+              return edges;
+            }
+
+            normalizedAssignments.forEach((info, cellRef) => {
+              const className = info.className;
+              if (!className) return;
               const cell = gridBody.querySelector(`td[data-ref="${cellRef}"]`);
               if (!cell) return;
               const existingClass = chipHighlightedCells.get(cellRef);
               if (existingClass && existingClass !== className) {
                 cell.classList.remove(existingClass);
               }
-              if (className && !cell.classList.contains(className)) {
+              if (!cell.classList.contains(className)) {
                 cell.classList.add(className);
               }
               cell.classList.add('chip-selector');
-              cell.setAttribute('data-chip-selector-edge', 'top bottom left right');
+              const edges = getEdgesForCell(cellRef, info);
+              if (edges.length > 0) {
+                cell.setAttribute('data-chip-selector-edge', edges.join(' '));
+              } else {
+                cell.removeAttribute('data-chip-selector-edge');
+              }
               chipHighlightedCells.set(cellRef, className);
             });
           }
@@ -346,12 +424,27 @@
             updateGridHighlights(new Map());
           }
 
+          function getChipColorKey(refKey = '') {
+            if (!refKey) return '';
+            const normalized = refKey.trim().toUpperCase();
+            if (!normalized) return '';
+            const colonIndex = normalized.indexOf(':');
+            if (colonIndex !== -1) {
+              const left = normalized.substring(0, colonIndex);
+              return left || normalized;
+            }
+            return normalized;
+          }
+
           function getChipColorClass(refKey = '') {
             if (!refKey || chipColorPalette.length === 0) {
               return '';
             }
 
-            const normalizedKey = refKey.trim().toUpperCase();
+            const normalizedKey = getChipColorKey(refKey);
+            if (!normalizedKey) {
+              return '';
+            }
             if (!cellChipColorAssignments.has(normalizedKey)) {
               const colorInfo = chipColorPalette[nextChipColorIndex % chipColorPalette.length];
               cellChipColorAssignments.set(normalizedKey, colorInfo.className);
@@ -522,7 +615,7 @@
                   // Create initial value with 7 empty lines
                   const initialValue = "\n\n\n\n\n\n\n";
                   
-                  editor = monaco.editor.create(monacoEditorContainer, {
+                    editor = monaco.editor.create(monacoEditorContainer, {
                     value: initialValue,
                     language: "excel-formula",
                     theme: "excel-formula-dark",
@@ -532,8 +625,8 @@
                     fontFamily: "Consolas, 'Courier New', monospace",
                     lineNumbers: 'on',
                     minimap: { enabled: false },
-                    scrollBeyondLastLine: false,
-                    readOnly: true,
+                      scrollBeyondLastLine: false,
+                      readOnly: false,
                     wordWrap: "off", // Disable word wrap - use horizontal scrolling instead
                     lineHeight: 1.5,
                     tabSize: 4,
@@ -2014,6 +2107,8 @@
                     let cellChipRanges = [];
                     let chipUpdateTimeout;
                     let isCursorInChip = false;
+                    let editorHasFocus = true;
+                    let incompleteChipCursorLock = null;
                     const defaultQuickSuggestions = editor.getOption(monaco.editor.EditorOption.quickSuggestions);
                     let chipSuppressedQuickSuggestions = false;
                     
@@ -2050,6 +2145,11 @@
                     // Track last processed text to avoid re-processing after space insertion
                     let lastProcessedText = '';
                     
+                    function isIncompleteRangeReference(refText = '') {
+                      if (!refText) return false;
+                      return refText.trim().endsWith(':');
+                    }
+
                     function updateCellChips() {
                       const model = editor.getModel();
                       if (!model) return;
@@ -2058,10 +2158,12 @@
                       const fullText = model.getValue();
                       
                       // Detect cell references
-                      const cellRefs = detectCellReferences(fullText);
-                      if (cellRefs.length === 0 && cellChipColorAssignments.size > 0) {
+                      const detectedRefs = detectCellReferences(fullText);
+                      const processedRefs = editorHasFocus ? detectedRefs : detectedRefs.filter(ref => !isIncompleteRangeReference(ref.text));
+                      if (detectedRefs.length === 0 && cellChipColorAssignments.size > 0) {
                         resetChipColorAssignments();
                       }
+                      const cellRefs = processedRefs;
                       const newHighlightAssignments = new Map();
 
                       // Ensure there is always at least one literal space between consecutive chips
@@ -2107,17 +2209,6 @@
                         }
                       }
                       
-                      // DEBUG: Log detected cell references
-                      if (cellRefs.length > 0) {
-                        console.log('Detected cell references:', cellRefs.map(r => ({ 
-                          text: r.text, 
-                          fullMatch: r.fullMatch, 
-                          start: r.start, 
-                          end: r.end,
-                          preview: fullText.substring(r.start, r.end)
-                        })));
-                      }
-                      
                       // Convert character indices to line/column positions and create decorations
                       const decorations = [];
                       const newChipRanges = [];
@@ -2148,10 +2239,11 @@
                             // Calculate column positions relative to the line
                             const textStartColumn = ref.start - lineStart + 1; // Monaco is 1-indexed
                             const textEndColumn = ref.end - lineStart + 1; // End position (exclusive in Monaco)
-                            
-                            // Check if spaces exist before and after, but allow tight binding with colons for ranges
                             const zeroBasedStart = ref.start - lineStart;
                             const zeroBasedEnd = ref.end - lineStart;
+                            const coreText = line.slice(zeroBasedStart, zeroBasedEnd);
+                            
+                            // Check if spaces exist before and after, but allow tight binding with colons for ranges
                             const charBefore = zeroBasedStart > 0 ? line[zeroBasedStart - 1] : '';
                             const charAfter = zeroBasedEnd < line.length ? line[zeroBasedEnd] : '';
                             const beforeIsSpace = /\s/.test(charBefore);
@@ -2162,6 +2254,42 @@
                             const shouldInsertSpaceAfter = !afterIsSpace && !afterIsColon;
                             const hasSpaceBefore = beforeIsSpace;
                             const hasSpaceAfter = afterIsSpace;
+
+                            // Normalize whitespace around range colons to keep them tight (e.g., "A1:B2")
+                            const colonIndex = coreText.indexOf(':');
+                            if (colonIndex !== -1) {
+                              let whitespaceBefore = 0;
+                              for (let i = colonIndex - 1; i >= 0 && /\s/.test(coreText[i]); i--) {
+                                whitespaceBefore++;
+                              }
+                              if (whitespaceBefore > 0) {
+                                edits.push({
+                                  range: new monaco.Range(
+                                    lineNumber,
+                                    textStartColumn + colonIndex - whitespaceBefore,
+                                    lineNumber,
+                                    textStartColumn + colonIndex
+                                  ),
+                                  text: ''
+                                });
+                              }
+
+                              let whitespaceAfter = 0;
+                              for (let i = colonIndex + 1; i < coreText.length && /\s/.test(coreText[i]); i++) {
+                                whitespaceAfter++;
+                              }
+                              if (whitespaceAfter > 0) {
+                                edits.push({
+                                  range: new monaco.Range(
+                                    lineNumber,
+                                    textStartColumn + colonIndex + 1,
+                                    lineNumber,
+                                    textStartColumn + colonIndex + 1 + whitespaceAfter
+                                  ),
+                                  text: ''
+                                });
+                              }
+                            }
                             
                             // Get current cursor position to check if we need to move it
                             const currentPosition = editor.getPosition();
@@ -2202,7 +2330,10 @@
                               const targetRefs = expandReferenceToCells(normalizedReference);
                               targetRefs.forEach((cellRef) => {
                                 if (cellRef) {
-                                  newHighlightAssignments.set(cellRef, chipColorClass);
+                                  newHighlightAssignments.set(cellRef, {
+                                    className: chipColorClass,
+                                    groupKey: normalizedReference
+                                  });
                                 }
                               });
                             }
@@ -2293,19 +2424,31 @@
                       // Update decorations (deltaDecorations replaces old with new)
                       // Only run if no edits were needed
                       
-                      // DEBUG: Log how many decorations we're creating
-                      console.log(`Creating ${decorations.length} decorations for ${cellRefs.length} cell references`);
-                      if (decorations.length > 0) {
-                        console.log('Decoration ranges:', decorations.map(d => ({
-                          line: d.range.startLineNumber,
-                          start: d.range.startColumn,
-                          end: d.range.endColumn,
-                          text: lines[d.range.startLineNumber - 1]?.substring(d.range.startColumn - 1, d.range.endColumn - 1)
-                        })));
-                      }
-                      
                       cellChipDecorations = editor.deltaDecorations(cellChipDecorations, decorations);
                       cellChipRanges = newChipRanges;
+
+                      if (incompleteChipCursorLock) {
+                        const lockPosition = new monaco.Position(
+                          incompleteChipCursorLock.lineNumber,
+                          incompleteChipCursorLock.column
+                        );
+                        const lockRange = getChipRangeAtPosition(lockPosition);
+                        if (!lockRange) {
+                          incompleteChipCursorLock = null;
+                        } else {
+                          const currentPosition = editor.getPosition();
+                          const needsMove = !currentPosition ||
+                            currentPosition.lineNumber !== lockPosition.lineNumber ||
+                            currentPosition.column !== lockPosition.column;
+                          if (needsMove) {
+                            window.isProgrammaticCursorChange = true;
+                            editor.setPosition(lockPosition);
+                            Promise.resolve().then(() => {
+                              window.isProgrammaticCursorChange = false;
+                            });
+                          }
+                        }
+                      }
                       
                       // Re-evaluate cursor suppression state
                       const currentPosition = editor.getPosition();
@@ -2402,6 +2545,7 @@
                         currentEditor.focus();
                       }
                     }
+                    window.applyReferenceToFormula = applyReferenceToFormula;
                     
                     // Auto-capitalize function names (unless inside quotes)
                     let capitalizeTimeout;
@@ -2580,12 +2724,30 @@
                       }, 100); // Small delay to allow typing to complete
                     });
                     
+                    editor.onDidChangeModelContent(() => {
+                      if (isEditMode) {
+                        syncEditingCellDisplayWithPane();
+                      }
+                    });
+                    
                     editor.onDidChangeCursorPosition((e) => {
                       if (window.isProgrammaticCursorChange) return;
                       const inChip = isPositionInsideChip(e.position);
                       if (inChip === isCursorInChip) return;
                       isCursorInChip = inChip;
                       suppressSuggestionsInChip(inChip);
+                    });
+
+                    editor.onDidFocusEditorText(() => {
+                      editorHasFocus = true;
+                      incompleteChipCursorLock = null;
+                      updateCellChips();
+                    });
+
+                    editor.onDidBlurEditorText(() => {
+                      editorHasFocus = false;
+                      incompleteChipCursorLock = null;
+                      updateCellChips();
                     });
                     
                     function closeSuggestionsIfOpen() {
@@ -2656,6 +2818,53 @@
                       chipUpdateTimeout = setTimeout(() => {
                         updateCellChips();
                       }, 100);
+                    });
+                    
+                    editor.onDidType((text) => {
+                      if (window.isProgrammaticCursorChange) return;
+                      const model = editor.getModel();
+                      if (!model) return;
+
+                      if (text === ':') {
+                        const position = editor.getPosition();
+                        if (!position) return;
+                        const colonLine = position.lineNumber;
+                        const colonColumn = Math.max(1, position.column - 1);
+                        const beforePosition = new monaco.Position(colonLine, Math.max(1, colonColumn - 1));
+                        const chipRange = getChipRangeAtPosition(beforePosition);
+                        if (!chipRange) return;
+                        if (beforePosition.column < chipRange.endColumn - 1) {
+                          return;
+                        }
+                        const insertColumn = Math.max(chipRange.startColumn, chipRange.endColumn - 1);
+                        const colonRange = new monaco.Range(colonLine, colonColumn, colonLine, colonColumn + 1);
+                        
+                        window.isProgrammaticCursorChange = true;
+                        editor.executeEdits('chip-colon-adjust', [
+                          {
+                            range: colonRange,
+                            text: '',
+                            forceMoveMarkers: true
+                          },
+                          {
+                            range: new monaco.Range(colonLine, insertColumn, colonLine, insertColumn),
+                            text: ':',
+                            forceMoveMarkers: true
+                          }
+                        ]);
+                        const lockPosition = new monaco.Position(colonLine, insertColumn + 1);
+                        editor.setPosition(lockPosition);
+                        incompleteChipCursorLock = {
+                          lineNumber: colonLine,
+                          column: insertColumn + 1
+                        };
+                        Promise.resolve().then(() => {
+                          window.isProgrammaticCursorChange = false;
+                        });
+                        return;
+                      }
+
+                      incompleteChipCursorLock = null;
                     });
                     
                     // Initial chip update
@@ -2848,7 +3057,7 @@
                   // Ctrl+Enter executes the formula but stays in edit mode
                   editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, () => {
                     const cell = window.selectedCell;
-                    if (cell && !editor.getOption(monaco.editor.EditorOption.readOnly)) {
+                    if (cell && isEditMode) {
                       // Get all lines from editor
                       const allLines = editor.getValue().split('\n');
                       // Get formula from all lines, join and trim
@@ -2913,14 +3122,8 @@
                       // If already in edit mode, Monaco Editor handles clicks automatically to position cursor
                       // We don't need to interfere - just ensure the editor is not read-only and cursor is visible
                       if (isEditMode) {
-                        // Ensure editor is editable (Monaco will handle cursor positioning automatically)
-                        if (editor.getOption(monaco.editor.EditorOption.readOnly)) {
-                          editor.updateOptions({ readOnly: false });
-                        }
                         // Ensure cursor is visible when clicking (including on line 1)
                         editor.updateOptions({ cursorBlinking: 'blink' });
-                        // Monaco Editor automatically positions cursor on click when not read-only
-                        // This works for all lines including line 1
                         return;
                       }
                       
@@ -2951,12 +3154,6 @@
             }, 100);
           }
 
-          let selectedCells = new Set();
-          let isSelecting = false;
-          let selectionStart = null;
-          let isEditMode = false;
-          window.selectedCell = null;
-          
           // Function to enter edit mode for a cell
           function enterEditMode(cell, clickPosition) {
             if (!cell) return;
@@ -3076,9 +3273,8 @@
               // Set value directly
               currentEditor.setValue(fullValue);
               
-              // Make editor editable BEFORE setting cursor position
+              // Make cursor visible for edit mode
               currentEditor.updateOptions({ 
-                readOnly: false,
                 cursorBlinking: 'blink', // Show cursor in edit mode
                 cursorStyle: 'line' // Ensure cursor is visible
               });
@@ -3088,10 +3284,15 @@
               
               // Focus the editor immediately - this is critical for edit mode
               currentEditor.focus();
+              // Mirror formula pane text inside the active cell while editing
+              syncEditingCellDisplayWithPane(true, currentEditor);
               
               // Reset flag after operations complete
               Promise.resolve().then(() => {
                 window.isProgrammaticCursorChange = false;
+                if (typeof updateCellChips === 'function') {
+                  requestAnimationFrame(() => updateCellChips());
+                }
               });
               
               // Also ensure focus after a brief delay to handle any async operations
@@ -3103,6 +3304,91 @@
                 }
               }, 50);
             }
+          }
+          
+          function getFormulaPaneSnapshotText(activeEditorInstance) {
+            const activeEditor = activeEditorInstance || window.monacoEditor || editor;
+            if (!activeEditor || typeof activeEditor.getValue !== 'function') {
+              return "";
+            }
+            const rawValue = activeEditor.getValue() || "";
+            return rawValue.replace(/\r\n/g, '\n');
+          }
+
+          function isMonacoEditorFocused(editorInstance) {
+            if (!editorInstance) return false;
+            if (typeof editorInstance.hasTextFocus === 'function') {
+              return editorInstance.hasTextFocus();
+            }
+            const domNode = typeof editorInstance.getDomNode === 'function' ? editorInstance.getDomNode() : null;
+            if (!domNode) return false;
+            return domNode === document.activeElement || domNode.contains(document.activeElement);
+          }
+          
+          function blurMonacoEditor(editorInstance) {
+            const instance = editorInstance || window.monacoEditor || editor;
+            if (!instance) return;
+            
+            if (typeof instance.blur === 'function') {
+              instance.blur();
+            }
+            
+            const domNode = typeof instance.getDomNode === 'function' ? instance.getDomNode() : null;
+            if (!domNode) return;
+            
+            const activeElement = document.activeElement;
+            if (activeElement && domNode.contains(activeElement)) {
+              if (typeof activeElement.blur === 'function') {
+                activeElement.blur();
+              }
+            }
+            
+            const textArea = domNode.querySelector('textarea');
+            if (textArea && typeof textArea.blur === 'function') {
+              textArea.blur();
+            }
+          }
+          
+          function syncEditingCellDisplayWithPane(force = false, activeEditorInstance = null) {
+            if (!isEditMode || !window.selectedCell) {
+              return;
+            }
+            const cell = window.selectedCell;
+            const display = cell.querySelector(".grid-cell-display");
+            if (!display) {
+              return;
+            }
+
+            if (force || !cell.hasAttribute("data-original-display-text")) {
+              cell.setAttribute("data-original-display-text", display.textContent || "");
+            }
+
+            const formulaText = getFormulaPaneSnapshotText(activeEditorInstance);
+            cell.setAttribute("data-showing-formula-text", "true");
+            display.textContent = formulaText;
+          }
+
+          function clearEditingCellDisplayOverride(cell) {
+            if (!cell) {
+              return;
+            }
+            cell.removeAttribute("data-showing-formula-text");
+
+            const display = cell.querySelector(".grid-cell-display");
+            if (!display) {
+              return;
+            }
+
+            const cellRef = cell.getAttribute("data-ref");
+            const originalText = cell.getAttribute("data-original-display-text");
+
+            if (cellRef && typeof updateCellDisplay === 'function' && window.hf) {
+              updateCellDisplay(cellRef);
+            } else if (originalText !== null) {
+              display.textContent = originalText;
+            }
+
+            cell.removeAttribute("data-original-display-text");
           }
           
           // Function to update a cell's display from HyperFormula
@@ -3135,11 +3421,14 @@
               // Update the display in the grid
               const cell = gridBody.querySelector(`td[data-ref="${cellRef}"]`);
               if (cell) {
+                const isShowingFormulaText = cell.getAttribute("data-showing-formula-text") === "true";
                 const display = cell.querySelector(".grid-cell-display");
                 if (display) {
-                  // Show the calculated result (without "=" prefix)
+                  // Show the calculated result (without "=" prefix) unless we're mirroring the formula text
                   const displayValue = cellValue !== null && cellValue !== undefined ? cellValue.toString() : "";
-                  display.textContent = displayValue;
+                  if (!isShowingFormulaText) {
+                    display.textContent = displayValue;
+                  }
                   
                   // Store the formula or value in data-formula attribute for quick retrieval
                   // Formulas have "=" prefix, plain values don't
@@ -3398,6 +3687,7 @@
               cell.removeAttribute("data-selection-edge");
             });
             selectedCells.clear();
+            selectionAnchorCell = null;
             
             // Remove edit-mode class from editor-wrapper when clearing selection
             if (!isEditMode) {
@@ -3477,6 +3767,7 @@
             clearSelection();
             
             if (!startCell || !endCell) return;
+            selectionAnchorCell = startCell;
             
             const startRow = parseInt(startCell.getAttribute("data-row"));
             const startCol = parseInt(startCell.getAttribute("data-col"));
@@ -3562,10 +3853,12 @@
                   // Reset flag after a microtask to allow normal cursor behavior
                   Promise.resolve().then(() => {
                     window.isProgrammaticCursorChange = false;
+                    if (typeof updateCellChips === 'function') {
+                      requestAnimationFrame(() => updateCellChips());
+                    }
                   });
                   
                   currentEditor.updateOptions({ 
-                    readOnly: !isEditMode,
                     cursorBlinking: isEditMode ? 'blink' : 'hidden'
                   });
                 }
@@ -3579,7 +3872,6 @@
                   }
                   
                   currentEditor.updateOptions({ 
-                    readOnly: true,
                     cursorBlinking: 'hidden' // Hide cursor in selection mode
                   });
                 }
@@ -3587,6 +3879,63 @@
               window.selectedCell = firstCell;
             }
             updateCellRangePill();
+          }
+
+          function enterSelectionModeAndSelectCell(targetCell) {
+            if (!targetCell) return;
+            const previouslyEditingCell = isEditMode ? window.selectedCell : null;
+            isEditMode = false;
+            if (previouslyEditingCell) {
+              clearEditingCellDisplayOverride(previouslyEditingCell);
+            }
+            cancelFormulaSelection();
+
+            const editorWrapper = document.querySelector('.editor-wrapper');
+            if (editorWrapper) {
+              editorWrapper.classList.remove('editor-edit-mode');
+            }
+
+            const currentEditor = window.monacoEditor || editor;
+            if (currentEditor && typeof currentEditor.updateOptions === 'function') {
+              currentEditor.updateOptions({
+                cursorBlinking: 'hidden',
+                cursorStyle: 'line'
+              });
+              blurMonacoEditor(currentEditor);
+              currentEditor.render(true);
+            }
+
+            if (typeof updateSelectionOverlay === 'function') {
+              updateSelectionOverlay();
+            }
+
+            selectCell(targetCell);
+          }
+
+          function moveSelectionBy(deltaRow = 0, deltaCol = 0, extendSelection = false) {
+            const currentCell = window.selectedCell;
+            if (!currentCell) return;
+            const currentRow = parseInt(currentCell.getAttribute("data-row"), 10);
+            const currentCol = parseInt(currentCell.getAttribute("data-col"), 10);
+            if (Number.isNaN(currentRow) || Number.isNaN(currentCol)) return;
+
+            const maxRow = typeof window.totalGridRows === 'number' ? window.totalGridRows - 1 : currentRow;
+            const maxCol = typeof window.totalGridColumns === 'number' ? window.totalGridColumns - 1 : currentCol;
+
+            const targetRow = Math.max(0, Math.min(maxRow, currentRow + deltaRow));
+            const targetCol = Math.max(0, Math.min(maxCol, currentCol + deltaCol));
+
+            const targetCell = gridBody.querySelector(`tr[data-row="${targetRow}"] td[data-col="${targetCol}"]`);
+            if (!targetCell) return;
+
+            if (extendSelection) {
+              const anchor = selectionAnchorCell || currentCell;
+              selectRange(anchor, targetCell);
+            } else {
+              enterSelectionModeAndSelectCell(targetCell);
+              selectionAnchorCell = targetCell;
+            }
+            targetCell.scrollIntoView({ block: 'nearest', inline: 'nearest' });
           }
           
           // Function to select a single cell programmatically (selection mode)
@@ -3602,6 +3951,7 @@
             // Single cell selection - all edges should have borders
             cell.setAttribute("data-selection-edge", "top bottom left right");
             window.selectedCell = cell;
+            selectionAnchorCell = cell;
             
             // Update selection overlay
             updateSelectionOverlay();
@@ -3724,10 +4074,12 @@
                   // Reset flag after operations complete
                   Promise.resolve().then(() => {
                     window.isProgrammaticCursorChange = false;
+                    if (typeof updateCellChips === 'function') {
+                      requestAnimationFrame(() => updateCellChips());
+                    }
                   });
                   
                   currentEditor.updateOptions({ 
-                    readOnly: !isEditMode, // Read-only when not in edit mode
                     cursorBlinking: isEditMode ? 'blink' : 'hidden', // Show cursor only in edit mode
                     cursorStyle: 'line'
                   });
@@ -3739,9 +4091,7 @@
                   } else if (!isEditMode) {
                     // Blur the editor to ensure cursor is completely hidden
                     // Also force cursor to be hidden via CSS (handled in styles.css)
-                    if (typeof currentEditor.blur === 'function') {
-                      currentEditor.blur();
-                }
+                  blurMonacoEditor(currentEditor);
                     // Force update to ensure cursor is hidden
                     currentEditor.render(true);
                   }
@@ -3751,17 +4101,18 @@
               const currentEditor = window.monacoEditor || editor;
               if (currentEditor) {
                 currentEditor.updateOptions({ 
-                  readOnly: true,
                   cursorBlinking: 'hidden' // Hide cursor in selection mode
                 });
                 // Blur and force re-render to ensure cursor is hidden
-                if (typeof currentEditor.blur === 'function') {
-                  currentEditor.blur();
-                }
+                blurMonacoEditor(currentEditor);
                 currentEditor.render(true);
               }
             }
             updateCellRangePill();
+
+            if (typeof updateCellChips === 'function') {
+              requestAnimationFrame(() => updateCellChips());
+            }
           }
           
           // Disable editor initially (no cell selected) - will be set when Monaco loads
@@ -3783,6 +4134,7 @@
           document.addEventListener("keydown", (e) => {
             // Exit edit mode when pressing Escape
             if (e.key === "Escape" && isEditMode) {
+              const editingCell = window.selectedCell;
               isEditMode = false;
               cancelFormulaSelection();
               
@@ -3804,11 +4156,15 @@
               if (currentEditor && typeof currentEditor.setValue === 'function') {
                 const fullValue = ensureSevenLines(lastSavedFormula || "");
                 currentEditor.setValue(fullValue);
+                if (typeof updateCellChips === 'function') {
+                  requestAnimationFrame(() => updateCellChips());
+                }
               }
               
               // Remove edit-mode class from selected cell when exiting edit mode
-              if (window.selectedCell) {
-                window.selectedCell.classList.remove("edit-mode");
+              if (editingCell) {
+                editingCell.classList.remove("edit-mode");
+                clearEditingCellDisplayOverride(editingCell);
               }
               
               // Remove edit-mode class from editor-wrapper
@@ -3824,9 +4180,7 @@
                   cursorStyle: 'line'
                 });
                 // Blur the editor and force re-render to hide cursor
-                if (typeof currentEditor.blur === 'function') {
-                  currentEditor.blur();
-                }
+                blurMonacoEditor(currentEditor);
                 // Force re-render to ensure cursor is hidden
                 currentEditor.render(true);
               }
@@ -3834,6 +4188,10 @@
               // Show selection overlay with triangle fill handle when exiting edit mode
               if (typeof updateSelectionOverlay === 'function') {
                 updateSelectionOverlay();
+              }
+
+              if (typeof updateCellChips === 'function') {
+                requestAnimationFrame(() => updateCellChips());
               }
               
               // Monaco Editor doesn't have blur(), just exit edit mode
@@ -3844,8 +4202,32 @@
             // Enter edit mode when user starts typing and a cell is selected
             // Only if we're not already in edit mode and not already focused in the editor
             const currentEditor = window.monacoEditor || editor;
-            const isEditorFocused = currentEditor && document.activeElement === currentEditor.getDomNode();
+            const isEditorFocused = isMonacoEditorFocused(currentEditor);
             
+            if (!isEditMode && window.selectedCell) {
+              const navigationMap = {
+                ArrowUp: { row: -1, col: 0 },
+                ArrowDown: { row: 1, col: 0 },
+                ArrowLeft: { row: 0, col: -1 },
+                ArrowRight: { row: 0, col: 1 }
+              };
+              if (navigationMap[e.key]) {
+                e.preventDefault();
+                moveSelectionBy(navigationMap[e.key].row, navigationMap[e.key].col, e.shiftKey);
+                return;
+              }
+              if (e.key === 'Tab') {
+                e.preventDefault();
+                moveSelectionBy(0, e.shiftKey ? -1 : 1, false);
+                return;
+              }
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                moveSelectionBy(e.shiftKey ? -1 : 1, 0, false);
+                return;
+              }
+            }
+
             // Check if a printable character is being typed (not modifiers, arrows, etc.)
             const isPrintableChar = e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey;
             
@@ -3917,6 +4299,8 @@
 
           function buildGrid(rows = 150, columns = 50) {
             console.log("buildGrid function called with rows:", rows, "columns:", columns);
+            window.totalGridRows = rows;
+            window.totalGridColumns = columns;
             const gridHeader = document.getElementById("gridHeader");
             if (!gridHeader) {
               console.error("gridHeader not found!");
@@ -4250,49 +4634,18 @@
                 });
                 
                 // Single click handler (when not dragging) - selection mode
-                let clickTimeout;
-                let clickCount = 0;
                 cell.addEventListener("click", (e) => {
                   if (isFormulaSelecting) {
                     e.preventDefault();
                     return;
                   }
-                  clickCount++;
-                  clearTimeout(clickTimeout);
-                  clickTimeout = setTimeout(() => {
-                    if (clickCount === 1 && !isSelecting) {
-                      isEditMode = false;
-                      cancelFormulaSelection();
-                      
-                      // Remove edit-mode class from editor-wrapper when entering selection mode
-                      const editorWrapper = document.querySelector('.editor-wrapper');
-                      if (editorWrapper) {
-                        editorWrapper.classList.remove('editor-edit-mode');
-                      }
-                      
-                      // Hide cursor when leaving edit mode
-                      const currentEditor = window.monacoEditor || editor;
-                      if (currentEditor && typeof currentEditor.updateOptions === 'function') {
-                        currentEditor.updateOptions({ 
-                          cursorBlinking: 'hidden',
-                          cursorStyle: 'line'
-                        });
-                        // Blur and force re-render to hide cursor
-                        if (typeof currentEditor.blur === 'function') {
-                          currentEditor.blur();
-                        }
-                        currentEditor.render(true);
-                      }
-                      
-                      // Show selection overlay with triangle fill handle when entering selection mode
-                      if (typeof updateSelectionOverlay === 'function') {
-                        updateSelectionOverlay();
-                      }
-                      
-                      selectCell(cell);
-                    }
-                    clickCount = 0;
-                  }, 300);
+                  if (isSelecting) {
+                    return;
+                  }
+                  if (e.detail > 1) {
+                    return;
+                  }
+                  enterSelectionModeAndSelectCell(cell);
                 });
                 
                 // Double click handler - edit mode
@@ -4300,9 +4653,6 @@
                   e.preventDefault();
                   e.stopPropagation();
                   e.stopImmediatePropagation();
-                  // Clear the click timeout immediately to prevent single click handler from interfering
-                  clearTimeout(clickTimeout);
-                  clickCount = 0;
                   // Set edit mode flag immediately to prevent click handler from setting it to false
                   isEditMode = true;
                   // Enter edit mode
