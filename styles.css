@@ -858,6 +858,156 @@ button {
   min-height: 20px;
 }
 
+/* Inline cell chips in Monaco editor - using decorations */
+.cell-chip-inline {
+  color: var(--chip-text-color, var(--chip-border-color, #569CD6)) !important;
+  font-size: 11px !important;
+  font-family: "Consolas", "Courier New", monospace !important;
+  display: inline !important;
+  line-height: 1.2 !important;
+  white-space: pre !important;
+  position: relative !important;
+  vertical-align: baseline !important;
+  box-sizing: border-box !important;
+  background: var(--chip-background-color, rgba(86, 156, 214, 0.2)) !important;
+  pointer-events: none !important;
+}
+
+.cell-chip-inline-left {
+  border: 1.5px solid var(--chip-border-color, #569CD6) !important;
+  border-right: none !important;
+  border-radius: 4px 0 0 4px !important;
+  padding: 1px 0 !important;
+}
+
+.cell-chip-inline-core {
+  border-top: 1.5px solid var(--chip-border-color, #569CD6) !important;
+  border-bottom: 1.5px solid var(--chip-border-color, #569CD6) !important;
+  border-left: none !important;
+  border-right: none !important;
+  padding: 1px 0 !important;
+}
+
+.cell-chip-inline-right {
+  border: 1.5px solid var(--chip-border-color, #569CD6) !important;
+  border-left: none !important;
+  border-radius: 0 4px 4px 0 !important;
+  padding: 1px 0 !important;
+}
+
+.chip-color-0 {
+  --chip-border-color: #8C3B2A;
+  --chip-background-color: rgba(140, 59, 42, 0.2);
+}
+
+.chip-color-1 {
+  --chip-border-color: #9A5FA7;
+  --chip-background-color: rgba(154, 95, 167, 0.2);
+}
+
+.chip-color-2 {
+  --chip-border-color: #4B4C97;
+  --chip-background-color: rgba(75, 76, 151, 0.2);
+}
+
+.chip-color-3 {
+  --chip-border-color: #6B9B62;
+  --chip-background-color: rgba(107, 155, 98, 0.2);
+}
+
+.chip-color-4 {
+  --chip-border-color: #D7DB8A;
+  --chip-background-color: rgba(215, 219, 138, 0.2);
+}
+
+.chip-color-5 {
+  --chip-border-color: #777777;
+  --chip-background-color: rgba(119, 119, 119, 0.2);
+}
+
+.chip-color-6 {
+  --chip-border-color: #BEBEBE;
+  --chip-background-color: rgba(190, 190, 190, 0.2);
+}
+
+.chip-color-7 {
+  --chip-border-color: #68551A;
+  --chip-background-color: rgba(104, 85, 26, 0.2);
+}
+
+.chip-color-8 {
+  --chip-border-color: #A56C45;
+  --chip-background-color: rgba(165, 108, 69, 0.2);
+}
+
+.chip-color-9 {
+  --chip-border-color: #C9877C;
+  --chip-background-color: rgba(201, 135, 124, 0.2);
+}
+
+.chip-color-10 {
+  --chip-border-color: #8C86C8;
+  --chip-background-color: rgba(140, 134, 200, 0.2);
+}
+
+.chip-color-11 {
+  --chip-border-color: #B8DCAD;
+  --chip-background-color: rgba(184, 220, 173, 0.2);
+}
+
+.chip-color-12 {
+  --chip-border-color: #88C1CB;
+  --chip-background-color: rgba(136, 193, 203, 0.2);
+}
+
+.chip-color-13 {
+  --chip-border-color: #8F8F8F;
+  --chip-background-color: rgba(143, 143, 143, 0.2);
+}
+
+.chip-color-14 {
+  --chip-border-color: #FFFFFF;
+  --chip-background-color: rgba(255, 255, 255, 0.2);
+  --chip-text-color: #FFFFFF;
+}
+
+.grid-table td.chip-selector::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  pointer-events: none;
+  z-index: 90;
+  box-sizing: border-box;
+  border-top: 0;
+  border-right: 0;
+  border-bottom: 0;
+  border-left: 0;
+  border-radius: 2px;
+}
+
+.grid-table td.chip-selector[data-chip-selector-edge*="top"]::after {
+  border-top: 1px solid var(--chip-border-color, #569CD6);
+}
+
+.grid-table td.chip-selector[data-chip-selector-edge*="bottom"]::after {
+  border-bottom: 1px solid var(--chip-border-color, #569CD6);
+}
+
+.grid-table td.chip-selector[data-chip-selector-edge*="left"]::after {
+  border-left: 1px solid var(--chip-border-color, #569CD6);
+}
+
+.grid-table td.chip-selector[data-chip-selector-edge*="right"]::after {
+  border-right: 1px solid var(--chip-border-color, #569CD6);
+}
+
+.grid-table td.chip-selector {
+  animation: tranquilPulseUniform 4s ease-in-out infinite;
+}
+
 .formula-equals {
   color: #858585;
   font-size: 11px;
@@ -943,7 +1093,7 @@ button {
 }
 
 .sliding-pane:not(.collapsed) {
-  /* Height will be set by JavaScript to 40% of formula editor */
+  /* Height will be set by JavaScript to 20% of formula editor */
   /* Animation is handled by CSS transition on height property */
 }
 
