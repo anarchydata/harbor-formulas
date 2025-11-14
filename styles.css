@@ -1,0 +1,1086 @@
+:root {
+  color-scheme: dark;
+  --background: #000000;
+  --sidebar: #000000;
+  --panel: #000000;
+  --border: #454545;
+  --border-thin: #2d2d30;
+  --hover: #1a1a1a;
+  --selected: #094771;
+  --text: #cccccc;
+  --text-muted: #858585;
+  --accent: #007acc;
+  font-family: "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont,
+    "Helvetica Neue", sans-serif;
+  font-size: 13px;
+}
+
+/* Custom Scrollbars */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(60, 60, 60, 0.5) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 14px;
+  height: 14px;
+  background: transparent;
+  -webkit-appearance: none;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+  border: none;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: rgba(60, 60, 60, 0.5);
+  border: none;
+  border-radius: 0;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: rgba(80, 80, 80, 0.5);
+}
+
+*::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* Hide scrollbar arrows completely */
+*::-webkit-scrollbar-button {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+  -webkit-appearance: none;
+}
+
+*::-webkit-scrollbar-button:start:decrement,
+*::-webkit-scrollbar-button:end:increment {
+  display: none !important;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  margin: 0;
+  background: var(--background);
+  color: var(--text);
+  min-height: 100vh;
+  display: flex;
+  overflow: hidden;
+  font-size: 13px;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+.workbench {
+  display: flex !important;
+  flex: 1;
+  height: 100vh !important;
+  width: 100% !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+}
+
+/* Left Sidebar - File Explorer */
+.sidebar {
+  width: 15vw !important;
+  min-width: 150px;
+  max-width: none;
+  background: var(--sidebar);
+  border-right: 0.5px solid var(--border-thin);
+  display: flex !important;
+  flex-direction: column;
+  font-size: 13px;
+  flex-shrink: 0;
+  visibility: visible !important;
+  opacity: 1 !important;
+}
+
+.sidebar-icon-bar {
+  display: flex;
+  align-items: center;
+  padding: 4px;
+  border-bottom: none;
+  background: var(--panel);
+  gap: 2px;
+}
+
+.sidebar-icon {
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: var(--text);
+  font-size: 16px;
+  border-radius: 2px;
+}
+
+.sidebar-icon:hover {
+  background: var(--hover);
+}
+
+.sidebar-icon.active {
+  background: var(--hover);
+}
+
+.file-tree {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0;
+}
+
+.folder-header {
+  padding: 3px 8px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 11px;
+  user-select: none;
+  font-weight: 400;
+  text-transform: uppercase;
+}
+
+.folder-header:hover {
+  background: transparent;
+}
+
+.folder-chevron {
+  width: 16px;
+  height: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  transition: transform 0.2s;
+}
+
+.folder-chevron.collapsed {
+  transform: rotate(-90deg);
+}
+
+.folder-content {
+  padding-left: 20px;
+}
+
+.folder-content.collapsed {
+  display: none;
+}
+
+.file-item {
+  padding: 3px 8px 3px 28px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text);
+  cursor: pointer;
+  font-size: 13px;
+  user-select: none;
+  margin: 0;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.file-item:hover {
+  background: var(--hover);
+}
+
+.file-item.selected {
+  background: #2d2d30;
+  margin-left: -20px;
+  width: calc(100% + 20px);
+  padding-left: 28px;
+}
+
+.file-icon {
+  width: 16px;
+  height: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  font-size: 14px;
+  color: var(--text);
+}
+
+.file-icon.excel {
+  color: #217346;
+  font-weight: bold;
+}
+
+.file-icon.folder {
+  color: var(--text);
+}
+
+.open-file-btn {
+  margin: 8px;
+  padding: 4px 8px;
+  background: var(--accent);
+  color: white;
+  border-radius: 2px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.open-file-btn:hover {
+  background: #005a9e;
+}
+
+/* Middle Section - Split Grid and Chat */
+.middle-section {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex !important;
+  flex-direction: column;
+  background: var(--background);
+  visibility: visible !important;
+  opacity: 1 !important;
+  height: 100%;
+}
+
+.grid-container {
+  flex: 0 0 60% !important;
+  display: flex !important;
+  flex-direction: column;
+  overflow: hidden;
+  border-bottom: 0.5px solid var(--border-thin);
+  visibility: visible !important;
+  opacity: 1 !important;
+  min-height: 200px;
+}
+
+.grid-header {
+  padding: 4px 8px;
+  background: var(--panel);
+  border-bottom: 0.5px solid var(--border-thin);
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.grid-wrapper {
+  flex: 1;
+  overflow: hidden;
+  background: var(--background);
+  position: relative;
+  visibility: visible !important;
+  opacity: 1 !important;
+  min-height: 200px;
+  display: block !important;
+}
+
+.grid-wrapper-inner {
+  width: 100%;
+  height: 100%;
+  overflow: auto;
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE and Edge */
+  position: relative; /* For absolute positioning of overlay */
+  visibility: visible !important;
+  opacity: 1 !important;
+  display: block !important;
+}
+
+/* Selection overlay rectangle - single element for multi-cell selections */
+.selection-overlay {
+  position: absolute;
+  pointer-events: none;
+  z-index: 100;
+  border: 1px solid #569CD6;
+  box-sizing: border-box;
+  display: none;
+  /* Uniform glow animation - calm, tranquil pulse */
+  animation: tranquilPulseUniform 4s ease-in-out infinite;
+}
+
+/* Fill handle - triangle in bottom-right corner */
+.selection-overlay .fill-handle {
+  position: absolute;
+  bottom: -1px;
+  right: -1px;
+  width: 10px;
+  height: 10px;
+  pointer-events: auto;
+  cursor: crosshair;
+  z-index: 101;
+  /* Right triangle with right angle at bottom-right, hypotenuse extending up-left */
+  /* Creates a triangle that sits in the corner with perpendicular sides along borders */
+  clip-path: polygon(0% 100%, 100% 100%, 100% 0%);
+  background-color: #569CD6;
+  /* No rotation needed - triangle naturally sits in corner */
+}
+
+.grid-wrapper-inner::-webkit-scrollbar {
+  display: none; /* Chrome, Safari, Opera */
+}
+
+/* Custom overlay scrollbars */
+.custom-scrollbar-vertical,
+.custom-scrollbar-horizontal {
+  position: absolute;
+  pointer-events: none;
+  z-index: 100;
+}
+
+.custom-scrollbar-vertical {
+  right: 0;
+  top: 0;
+  bottom: 0;
+  width: 10px;
+}
+
+.custom-scrollbar-horizontal {
+  bottom: 0;
+  left: 0;
+  right: 10px;
+  height: 10px;
+}
+
+.custom-scrollbar-thumb {
+  position: absolute;
+  background: rgba(60, 60, 60, 0.5);
+  border-radius: 0;
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+.custom-scrollbar-thumb:hover {
+  background: rgba(80, 80, 80, 0.5);
+}
+
+.custom-scrollbar-vertical .custom-scrollbar-thumb {
+  right: 0;
+  width: 10px;
+}
+
+.custom-scrollbar-horizontal .custom-scrollbar-thumb {
+  bottom: 0;
+  height: 10px;
+}
+
+.grid-table {
+  border-collapse: collapse;
+  table-layout: fixed;
+  font-size: 12px;
+  width: 100%;
+  visibility: visible !important;
+  opacity: 1 !important;
+  display: table !important;
+}
+
+.grid-table thead {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+
+.grid-table thead th {
+  background: #1e1e1e;
+  color: #5a5a5a;
+  border: none;
+  border-right: 0.5px solid var(--border-thin);
+  border-bottom: 0.5px solid var(--border-thin);
+  padding: 2px 4px;
+  text-align: center;
+  font-weight: bold;
+  font-size: 12px;
+  width: 80px;
+  min-width: 40px;
+  position: relative;
+  overflow: visible;
+  user-select: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+}
+
+.grid-table thead th:not(:first-child) {
+  cursor: default;
+}
+
+.grid-table thead th:not(:first-child)::after {
+  content: "";
+  position: absolute;
+  right: -5px;
+  top: 0;
+  bottom: 0;
+  width: 10px;
+  cursor: col-resize;
+  background: transparent;
+  z-index: 5;
+  pointer-events: auto;
+}
+
+.grid-table thead th:not(:first-child):hover::after {
+  background: var(--accent);
+  opacity: 0.5;
+}
+
+.grid-table thead th:last-child {
+  border-right: none;
+}
+
+.grid-table tbody td {
+  border: none;
+  border-right: 0.5px solid var(--border-thin);
+  border-bottom: 0.5px solid var(--border-thin);
+  padding: 0;
+  background: #000000;
+  color: var(--text);
+  height: 20px;
+  width: 80px;
+  min-width: 40px;
+  overflow: visible;
+  text-overflow: clip;
+  white-space: nowrap;
+  font-size: 12px;
+  font-family: "Consolas", "Courier New", monospace;
+  cursor: cell;
+  position: relative;
+}
+
+.grid-table tbody td[style*="width"] {
+  /* Allow inline width styles to override */
+}
+
+.grid-cell-display {
+  padding: 2px 4px;
+  width: 100%;
+  height: 100%;
+  display: block;
+  overflow: hidden;
+  text-overflow: clip;
+  white-space: nowrap;
+  font-family: "Consolas", "Courier New", monospace;
+}
+
+.grid-table tbody td:last-child {
+  border-right: none;
+}
+
+/* Ensure selected cell border is always visible, even on last column */
+.grid-table tbody td:last-child.selected {
+  border-right: 1px solid #569CD6 !important;
+  box-shadow: 0 0 0 1px #569CD6 !important;
+}
+
+.grid-table tbody td:first-child,
+.grid-table thead th:first-child {
+  background: #1e1e1e;
+  color: #5a5a5a;
+  text-align: center;
+  padding-right: 6px;
+  width: 40px;
+  min-width: 30px;
+  font-weight: bold;
+  font-size: 11px;
+  border-right: 0.5px solid var(--border-thin);
+  position: relative;
+  overflow: visible;
+  user-select: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+}
+
+.grid-table tbody td:first-child::after {
+  content: "";
+  position: absolute;
+  bottom: -3px;
+  left: 0;
+  right: 0;
+  height: 8px;
+  cursor: row-resize;
+  background: transparent;
+  z-index: 5;
+  pointer-events: auto;
+}
+
+.grid-table tbody td:first-child:hover::after {
+  background: var(--accent);
+  opacity: 0.5;
+}
+
+.grid-table tbody td:hover {
+  background: var(--hover);
+}
+
+.grid-table tbody td.selected {
+  background: rgba(200, 200, 200, 0.3) !important;
+  position: relative;
+  z-index: 100;
+}
+
+/* Pattern background for cells in edit mode */
+.grid-table tbody td.selected.edit-mode {
+  background-color: rgba(200, 200, 200, 0.3) !important;
+  background-image: repeating-linear-gradient(-45deg, rgba(255,255,255, 0.25), rgba(255,255,255, 0.25) 1px, transparent 1px, transparent 6px) !important;
+  background-size: 4px 4px !important;
+}
+
+/* Calm, tranquil pulse animation for single cell - uniform glow all around */
+@keyframes tranquilPulseUniform {
+  0%, 100% {
+    box-shadow: 
+      0 0 8px rgba(86, 156, 214, 0.4),
+      0 0 12px rgba(86, 156, 214, 0.2);
+  }
+  50% {
+    box-shadow: 
+      0 0 12px rgba(86, 156, 214, 0.6),
+      0 0 18px rgba(86, 156, 214, 0.3);
+  }
+}
+
+/* Uniform pulse animation using filter (for multi-cell selections) */
+@keyframes tranquilPulseUniformFilter {
+  0%, 100% {
+    filter: 
+      drop-shadow(0 0 8px rgba(86, 156, 214, 0.4)) 
+      drop-shadow(0 0 12px rgba(86, 156, 214, 0.2));
+  }
+  50% {
+    filter: 
+      drop-shadow(0 0 12px rgba(86, 156, 214, 0.6)) 
+      drop-shadow(0 0 18px rgba(86, 156, 214, 0.3));
+  }
+}
+
+/* Calm, tranquil pulse animation for selected cell glow - separate for each edge */
+/* Using filter drop-shadow animation which only affects the border */
+@keyframes tranquilPulseTop {
+  0%, 100% {
+    filter: drop-shadow(0 -6px 8px rgba(86, 156, 214, 0.4)) drop-shadow(0 -10px 12px rgba(86, 156, 214, 0.2));
+  }
+  50% {
+    filter: drop-shadow(0 -8px 12px rgba(86, 156, 214, 0.6)) drop-shadow(0 -14px 18px rgba(86, 156, 214, 0.3));
+  }
+}
+
+@keyframes tranquilPulseBottom {
+  0%, 100% {
+    filter: drop-shadow(0 6px 8px rgba(86, 156, 214, 0.4)) drop-shadow(0 10px 12px rgba(86, 156, 214, 0.2));
+  }
+  50% {
+    filter: drop-shadow(0 8px 12px rgba(86, 156, 214, 0.6)) drop-shadow(0 14px 18px rgba(86, 156, 214, 0.3));
+  }
+}
+
+@keyframes tranquilPulseLeft {
+  0%, 100% {
+    filter: drop-shadow(-6px 0 8px rgba(86, 156, 214, 0.4)) drop-shadow(-10px 0 12px rgba(86, 156, 214, 0.2));
+  }
+  50% {
+    filter: drop-shadow(-8px 0 12px rgba(86, 156, 214, 0.6)) drop-shadow(-14px 0 18px rgba(86, 156, 214, 0.3));
+  }
+}
+
+@keyframes tranquilPulseRight {
+  0%, 100% {
+    filter: drop-shadow(6px 0 8px rgba(86, 156, 214, 0.4)) drop-shadow(10px 0 12px rgba(86, 156, 214, 0.2));
+  }
+  50% {
+    filter: drop-shadow(8px 0 12px rgba(86, 156, 214, 0.6)) drop-shadow(14px 0 18px rgba(86, 156, 214, 0.3));
+  }
+}
+
+/* Use pseudo-element overlay to show border only on selection edges */
+.grid-table tbody td.selected::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  pointer-events: none; /* Border is not selectable */
+  z-index: 101;
+  box-sizing: border-box;
+  border-top: 0;
+  border-right: 0;
+  border-bottom: 0;
+  border-left: 0;
+}
+
+/* Show border only on top edge if marked */
+.grid-table tbody td.selected[data-selection-edge*="top"]::after {
+  border-top: 1px solid #569CD6;
+}
+
+/* Show border only on bottom edge if marked */
+.grid-table tbody td.selected[data-selection-edge*="bottom"]::after {
+  border-bottom: 1px solid #569CD6;
+}
+
+/* Show border only on left edge if marked */
+.grid-table tbody td.selected[data-selection-edge*="left"]::after {
+  border-left: 1px solid #569CD6;
+}
+
+/* Show border only on right edge if marked */
+.grid-table tbody td.selected[data-selection-edge*="right"]::after {
+  border-right: 1px solid #569CD6;
+}
+
+/* Glow animation - apply uniform glow to all outer edge cells (multi-cell selection) */
+/* This creates a continuous uniform glow around the entire selection rectangle */
+/* Use filter drop-shadow which glows the visible borders */
+.grid-table tbody td.selected[data-selection-edge]::after {
+  animation: tranquilPulseUniformFilter 3s ease-in-out infinite;
+}
+
+/* All four edges (single cell) - uniform glow on all sides */
+.grid-table tbody td.selected[data-selection-edge*="top"][data-selection-edge*="bottom"][data-selection-edge*="left"][data-selection-edge*="right"]::after {
+  animation: tranquilPulseUniform 4s ease-in-out infinite;
+  filter: none; /* Use box-shadow animation instead of filter */
+}
+
+
+/* Prevent headers from being visually highlighted */
+.grid-table thead th.selected,
+.grid-table tbody td:first-child.selected {
+  outline: none;
+  background: var(--sidebar) !important;
+}
+
+.tabs-bar {
+  display: flex;
+  gap: 0;
+  padding: 0;
+  background: var(--background);
+  border-top: 0.5px solid var(--border-thin);
+  font-size: 12px;
+}
+
+.tab {
+  padding: 4px 12px;
+  background: transparent;
+  border: 0.5px solid #000000;
+  border-right: 0.5px solid #000000;
+  border-top: 0.5px solid #000000;
+  cursor: pointer;
+  color: var(--text-muted);
+  font-size: 12px;
+  border-radius: 0;
+}
+
+.tab.active {
+  background: #1a1a1a;
+  color: var(--text);
+  border: 0.5px solid #000000;
+  border-bottom: none;
+  border-radius: 0;
+}
+
+/* Chat Section */
+.chat-container {
+  flex: 0 0 40% !important;
+  display: flex !important;
+  flex-direction: column;
+  background: var(--background);
+  border-top: 0.5px solid var(--border-thin);
+  visibility: visible !important;
+  opacity: 1 !important;
+  min-height: 200px;
+}
+
+.chat-header {
+  padding: 4px 8px;
+  background: var(--panel);
+  border-bottom: 0.5px solid var(--border-thin);
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.chat-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px;
+  font-size: 12px;
+}
+
+.chat-input-area {
+  padding: 8px;
+  padding-bottom: 16px;
+  background: var(--background);
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.chat-input-wrapper {
+  flex: 1;
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  background: #1a1a1a;
+  border: 0.5px solid var(--border-thin);
+  border-radius: 8px;
+  padding: 8px;
+}
+
+.chat-input {
+  flex: 1;
+  padding: 6px 8px;
+  background: transparent;
+  border: none;
+  color: var(--text);
+  font-size: 12px;
+  font-family: inherit;
+  resize: none;
+  outline: none;
+}
+
+.chat-buttons {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.chat-button {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--panel);
+  border: none;
+  color: var(--text);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  padding: 0;
+}
+
+.chat-button:hover {
+  background: var(--hover);
+}
+
+.chat-button.send {
+  background: var(--panel);
+}
+
+.chat-button.send:hover {
+  background: var(--accent);
+}
+
+/* Right Side - Formula Editor */
+.formula-editor {
+  width: 400px !important;
+  min-width: 200px !important;
+  max-width: none !important;
+  flex: 0 0 400px !important;
+  display: flex !important;
+  flex-direction: column;
+  background: var(--background);
+  border-left: 0.5px solid var(--border-thin);
+  visibility: visible !important;
+  opacity: 1 !important;
+  overflow: hidden;
+  /* Ensure formula editor has explicit height for percentage calculations */
+  height: 100% !important;
+  min-height: 300px;
+}
+
+.editor-header {
+  padding: 4px 8px;
+  background: #000000;
+  font-size: 12px;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.cell-range-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  background: var(--hover);
+  border: 0.5px solid var(--border-thin);
+  border-radius: 12px;
+  font-size: 11px;
+  color: var(--text);
+  font-family: "Consolas", "Courier New", monospace;
+  min-height: 20px;
+}
+
+.editor-wrapper {
+  flex: 1;
+  display: flex !important;
+  background: #000000;
+  overflow: hidden !important;
+  min-height: 150px !important;
+  position: relative;
+  /* Contain all content including suggest widget */
+  contain: layout style paint;
+  /* Clip overflow to prevent suggest widget from appearing outside */
+  clip-path: inset(0);
+  /* Ensure children are clipped */
+  isolation: isolate;
+  /* Allow wrapper to shrink when panes expand */
+  flex-shrink: 1;
+  visibility: visible !important;
+  opacity: 1 !important;
+}
+
+/* Bottom sliding panes */
+.bottom-panes {
+  display: flex !important;
+  flex-direction: column;
+  background: var(--background);
+  /* No border */
+  border: none;
+  /* Allow panes to expand independently, but constrain total to 50% */
+  flex-shrink: 0;
+  /* Use flexbox so panes can size relative to formula editor */
+  flex: 0 0 auto;
+  visibility: visible !important;
+  opacity: 1 !important;
+}
+
+.sliding-pane {
+  display: flex !important;
+  flex-direction: column;
+  background: var(--panel);
+  overflow: hidden;
+  transition: flex 0.3s ease-out;
+  /* No borders, stacked directly */
+  border: none;
+  /* Default collapsed state */
+  flex: 0 0 22px;
+  min-height: 22px;
+  visibility: visible !important;
+  opacity: 1 !important;
+}
+
+.sliding-pane:not(.collapsed) {
+  /* Height will be set by JavaScript to 50% of formula editor */
+  flex: 0 0 auto;
+  min-height: 0;
+}
+
+.sliding-pane.collapsed {
+  flex: 0 0 22px;
+  min-height: 22px;
+  max-height: 22px;
+  height: 22px;
+}
+
+.pane-header {
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  background: var(--background);
+  cursor: pointer;
+  user-select: none;
+  min-height: 22px;
+  /* No borders, no hover */
+  border: none;
+}
+
+.pane-toggle {
+  font-size: 11px;
+  color: #808080;
+  padding: 0 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  font-weight: normal;
+  line-height: 1;
+}
+
+.sliding-pane.collapsed .pane-toggle::before {
+  content: '▶';
+  font-weight: normal;
+  color: #808080;
+}
+
+.sliding-pane:not(.collapsed) .pane-toggle::before {
+  content: '▼';
+  font-weight: normal;
+  color: #808080;
+}
+
+.pane-title {
+  font-size: 11px;
+  font-weight: bold;
+  color: #808080;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 4px 0;
+}
+
+.pane-content {
+  flex: 1;
+  padding: 8px 12px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  font-size: 12px;
+  color: var(--text);
+  min-height: 0;
+  /* Custom scrollbar styling similar to grid */
+  scrollbar-width: thin;
+  scrollbar-color: rgba(60, 60, 60, 0.5) transparent;
+}
+
+.pane-content::-webkit-scrollbar {
+  width: 14px;
+  height: 14px;
+  background: transparent;
+  -webkit-appearance: none;
+}
+
+.pane-content::-webkit-scrollbar-track {
+  background: transparent;
+  border: none;
+}
+
+.pane-content::-webkit-scrollbar-thumb {
+  background: rgba(60, 60, 60, 0.5);
+  border: none;
+  border-radius: 0;
+}
+
+.pane-content::-webkit-scrollbar-thumb:hover {
+  background: rgba(80, 80, 80, 0.5);
+}
+
+.sliding-pane.collapsed .pane-content {
+  display: none;
+}
+
+#monacoEditor {
+  width: 100%;
+  height: 100%;
+  min-height: 150px;
+  position: relative;
+  overflow: hidden;
+}
+
+/* Ensure suggest widget doesn't overflow the formula editor container */
+.formula-editor {
+  overflow: hidden !important;
+  position: relative;
+  z-index: 100;
+  /* Clip all overflow to prevent suggest widget from appearing on grid */
+  contain: layout style paint;
+}
+
+/* Constrain Monaco suggest widget to formula editor - constrain dimensions, not visibility */
+.formula-editor .monaco-editor {
+  position: relative;
+  overflow: hidden;
+}
+
+/* Constrain suggest widget dimensions to formula editor with margins */
+.formula-editor {
+  overflow: hidden !important;
+  position: relative;
+  contain: layout style paint;
+}
+
+.formula-editor .monaco-editor {
+  overflow: hidden !important;
+  position: relative;
+}
+
+.formula-editor .monaco-editor .suggest-widget {
+  position: absolute !important;
+  /* Width will be constrained by JavaScript, but set a max to prevent overflow */
+  max-width: 500px !important;
+  max-height: 300px !important;
+  z-index: 10000 !important;
+  /* Clip overflow to prevent it from appearing outside */
+  overflow: hidden !important;
+  /* Ensure it's clipped by parent */
+  contain: strict;
+  /* Don't force position - let JavaScript handle it */
+}
+
+.formula-editor .monaco-editor .suggest-widget .monaco-list {
+  max-height: 280px !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+}
+
+/* First line in formula editor - read-only, no special background */
+.formula-first-line-readonly {
+  user-select: none !important;
+  pointer-events: none !important;
+  cursor: default !important;
+}
+
+/* Prevent selection on first line */
+.formula-editor .monaco-editor .view-lines .view-line:first-child {
+  user-select: none !important;
+  pointer-events: none !important;
+}
+
+/* Make the "=" in the line number area light grey */
+.formula-editor .monaco-editor .margin .line-numbers {
+  color: var(--text-muted); /* Default line number color */
+}
+
+.formula-editor .monaco-editor .margin .line-numbers .line-number[data-line-number="1"] {
+  color: #858585 !important; /* Light grey for the "=" text */
+}
+
+/* Alternative selector for Monaco line numbers */
+.formula-editor .monaco-editor .margin-view-overlays .line-numbers .line-number:first-child {
+  color: #858585 !important; /* Light grey for the "=" text */
+}
+
+/* Target the specific line number that shows "=" */
+.formula-editor .monaco-editor .margin-view-overlays .line-numbers .line-number {
+  color: var(--text-muted);
+}
+
+.formula-editor .monaco-editor .margin-view-overlays .line-numbers .line-number:first-child {
+  color: #858585 !important; /* Light grey for the "=" text */
+}
+
+/* Resizable Splitters */
+.resizer {
+  background: var(--border-thin);
+  cursor: col-resize;
+  width: 1px;
+  position: relative;
+  z-index: 10;
+  flex-shrink: 0;
+  pointer-events: auto;
+}
+
+.resizer:hover {
+  background: var(--accent);
+  width: 2px;
+}
+
+.resizer.horizontal {
+  cursor: row-resize;
+  height: 1px;
+  width: 100%;
+  background: var(--border-thin);
+  flex-shrink: 0;
+  pointer-events: auto;
+}
+
+.resizer.horizontal:hover {
+  background: var(--accent);
+  height: 2px;
+}
+

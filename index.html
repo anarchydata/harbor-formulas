@@ -1,0 +1,3358 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Harbor Formulas</title>
+  </head>
+  <body>
+    <div class="workbench">
+      <!-- Left Sidebar -->
+      <div class="sidebar">
+        <div class="sidebar-icon-bar">
+          <div class="sidebar-icon active" title="Explorer">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+              <path d="M2 2h12v12H2V2zm1 1v10h10V3H3zm1 1h8v1H4V4zm0 2h8v1H4V6zm0 2h8v1H4V8zm0 2h6v1H4v-1z"/>
+            </svg>
+          </div>
+          <div class="sidebar-icon" title="Search">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+              <path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001c.03.04 062.078.098.115.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1.007 1.007 0 0 0-.115-.1zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0z"/>
+            </svg>
+          </div>
+        </div>
+        <div class="file-tree">
+          <div class="folder-header" id="projectFolder">
+            <span class="folder-chevron">▼</span>
+            <span>Project Folder</span>
+          </div>
+          <div class="folder-content" id="projectFolderContent">
+            <div class="file-item selected">
+              <span class="file-icon excel">X</span>
+              <span>financial model.xlsx</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Resizer -->
+      <div class="resizer" id="leftResizer"></div>
+
+      <!-- Middle Section -->
+      <div class="middle-section">
+        <!-- Grid Section (60%) -->
+        <div class="grid-container">
+          <div class="grid-header">Spreadsheet</div>
+          <div class="grid-wrapper">
+            <div class="grid-wrapper-inner" id="gridWrapperInner">
+              <table class="grid-table" aria-label="Spreadsheet grid">
+                <thead id="gridHeader">
+                  <tr>
+                    <th scope="col"></th>
+                  </tr>
+                </thead>
+                <tbody id="gridBody"></tbody>
+              </table>
+              <div class="selection-overlay" id="selectionOverlay">
+                <div class="fill-handle" id="fillHandle"></div>
+              </div>
+            </div>
+            <div class="custom-scrollbar-vertical" id="customScrollbarV"></div>
+            <div class="custom-scrollbar-horizontal" id="customScrollbarH"></div>
+          </div>
+          <div class="tabs-bar">
+            <button class="tab active" type="button">Sheet1</button>
+            <button class="tab" type="button">+</button>
+          </div>
+        </div>
+
+        <!-- Resizer -->
+        <div class="resizer horizontal" id="middleResizer"></div>
+
+        <!-- Chat Section (40%) -->
+        <div class="chat-container">
+          <div class="chat-header">Chat</div>
+          <div class="chat-messages" id="chatMessages"></div>
+          <div class="chat-input-area">
+            <div class="chat-input-wrapper">
+              <textarea
+                class="chat-input"
+                id="chatInput"
+                rows="3"
+                placeholder="Plan, @ for context, / for commands"
+              ></textarea>
+              <div class="chat-buttons">
+                <button class="chat-button image" type="button" title="Upload image">
+                  <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                    <path d="M6.002 5.5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0z"/>
+                    <path d="M14.002 1a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2h-12a2 2 0 0 1-2-2V3a2 2 0 0 1 2-2h12zm-12 1a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V3a1 1 0 0 0-1-1h-12z"/>
+                    <path d="M10.648 7.646a.5.5 0 0 1 .707 0l2.5 2.5a.5.5 0 0 1-.707.707l-2.147-2.146-1.146 1.147a.5.5 0 0 1-.707 0l-2.5-2.5a.5.5 0 1 1 .707-.707l2.146 2.147 1.147-1.146z"/>
+                  </svg>
+                </button>
+                <button class="chat-button send" type="button" id="sendButton" title="Send">
+                  <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                    <path d="M8 15A7 7 0 1 0 8 1a7 7 0 0 0 0 14zm.5-4.5a.5.5 0 0 1-1 0V5.707L5.354 7.854a.5.5 0 1 1-.708-.708l3-3a.5.5 0 0 1 .708 0l3 3a.5.5 0 0 1-.708.708L8.5 5.707V10.5z"/>
+                  </svg>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Resizer -->
+      <div class="resizer" id="rightResizer"></div>
+
+      <!-- Right Side - Formula Editor -->
+      <div class="formula-editor" id="formulaEditor" style="width: 400px; min-width: 200px; flex: 0 0 400px; display: flex;">
+        <div class="editor-header">
+          <span class="cell-range-pill" id="cellRangePill"></span>
+        </div>
+        <div class="editor-wrapper">
+          <div id="monacoEditor" style="width: 100%; height: 100%;"></div>
+        </div>
+        <div class="bottom-panes">
+          <div class="sliding-pane messages-pane collapsed">
+            <div class="pane-header" data-pane="messages">
+              <span class="pane-toggle"></span>
+              <span class="pane-title">MESSAGES</span>
+            </div>
+            <div class="pane-content" id="messagesContent"></div>
+          </div>
+          <div class="sliding-pane dependencies-pane collapsed">
+            <div class="pane-header" data-pane="dependencies">
+              <span class="pane-toggle"></span>
+              <span class="pane-title">DEPENDENCIES</span>
+            </div>
+            <div class="pane-content" id="dependenciesContent"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <script type="module">
+      // Import styles
+      import './styles.css';
+      
+      // Configure MonacoEnvironment BEFORE importing monaco-editor
+      // This must be set before Monaco tries to create workers
+      self.MonacoEnvironment = {
+        getWorkerUrl: function(moduleId, label) {
+          // Vite will handle the worker paths
+          // Use relative paths that Vite can resolve
+          const base = import.meta.env.BASE_URL || '/';
+          if (label === 'json') {
+            return `${base}node_modules/monaco-editor/esm/vs/language/json/json.worker.js`;
+          }
+          if (label === 'css' || label === 'scss' || label === 'less') {
+            return `${base}node_modules/monaco-editor/esm/vs/language/css/css.worker.js`;
+          }
+          if (label === 'html' || label === 'handlebars' || label === 'razor') {
+            return `${base}node_modules/monaco-editor/esm/vs/language/html/html.worker.js`;
+          }
+          if (label === 'typescript' || label === 'javascript') {
+            return `${base}node_modules/monaco-editor/esm/vs/language/typescript/ts.worker.js`;
+          }
+          return `${base}node_modules/monaco-editor/esm/vs/editor/editor.worker.js`;
+        }
+      };
+      
+      // Wait for DOM to be ready
+      document.addEventListener("DOMContentLoaded", async function() {
+        console.log("DOMContentLoaded fired");
+        try {
+          // Initialize HyperFormula
+          console.log("Loading HyperFormula...");
+          const { HyperFormula } = await import('hyperformula');
+          console.log("HyperFormula loaded successfully");
+          
+          // Initialize HyperFormula instance (following official documentation)
+          window.hf = HyperFormula.buildEmpty({
+            licenseKey: 'gpl-v3' // Using GPL license for open source projects
+          });
+          
+          // Add Sheet1 - addSheet() returns the sheet name, not the ID
+          const sheetName = window.hf.addSheet('Sheet1');
+          console.log("addSheet('Sheet1') returned:", sheetName);
+          
+          // The first sheet added is always at index 0
+          window.hfSheetId = 0;
+          
+          // Verify the sheet exists
+          const sheetNames = window.hf.getSheetNames();
+          if (sheetNames.length === 0 || sheetNames[0] !== 'Sheet1') {
+            throw new Error("Sheet1 was not created successfully. Available sheets: " + sheetNames.join(', '));
+          }
+          
+          console.log("HyperFormula initialized", window.hf);
+          console.log("Sheet 'Sheet1' at index:", window.hfSheetId);
+          console.log("Available sheets:", sheetNames);
+          
+          // Folder collapse/expand functionality
+          const projectFolder = document.getElementById("projectFolder");
+          const projectFolderContent = document.getElementById("projectFolderContent");
+          const folderChevron = projectFolder.querySelector(".folder-chevron");
+          
+          if (projectFolder && projectFolderContent) {
+            projectFolder.addEventListener("click", () => {
+              const isCollapsed = projectFolderContent.classList.contains("collapsed");
+              if (isCollapsed) {
+                projectFolderContent.classList.remove("collapsed");
+                folderChevron.classList.remove("collapsed");
+              } else {
+                projectFolderContent.classList.add("collapsed");
+                folderChevron.classList.add("collapsed");
+              }
+            });
+          }
+
+          const monacoEditorContainer = document.getElementById("monacoEditor");
+          const gridBody = document.getElementById("gridBody");
+          const chatInput = document.getElementById("chatInput");
+          const chatMessages = document.getElementById("chatMessages");
+
+          if (!gridBody) {
+            console.error("gridBody not found - cannot build grid!");
+            return;
+          }
+          
+          if (!chatInput || !chatMessages) {
+            console.warn("Chat elements not found, but continuing...");
+          }
+
+          // Initialize Monaco Editor (load asynchronously in background)
+          // Don't block grid initialization on Monaco
+          window.monacoEditor = null;
+          let editor = null;
+          
+          // Load Monaco in background - don't wait for it
+          if (monacoEditorContainer) {
+            setTimeout(() => {
+              console.log("Loading Monaco Editor...");
+              import('monaco-editor').then(monaco => {
+                console.log("Monaco Editor loaded successfully");
+                
+                // Store monaco globally so it's accessible in selectCell and other functions
+                window.monaco = monaco;
+                
+                // MonacoEnvironment should already be set above, before the import
+                
+                try {
+                  // Define theme for excel-formula language
+                  monaco.editor.defineTheme("excel-formula-dark", {
+                    base: "vs-dark",
+                    inherit: true,
+                    rules: [
+                      { token: "", foreground: "D4D4D4" }, // Default text color
+                      { token: "comment", foreground: "6A9955", fontStyle: "italic" },
+                      { token: "keyword", foreground: "569CD6" },
+                      { token: "string", foreground: "D19A66" },
+                      { token: "string.escape", foreground: "D19A66" },
+                      { token: "string.quote", foreground: "D19A66" },
+                      { token: "delimiter", foreground: "D19A66" },
+                      { token: "delimiter.string", foreground: "D19A66" },
+                      { token: "delimiter.bracket", foreground: "D4D4D4" },
+                      { token: "delimiter.parenthesis", foreground: "D4D4D4" },
+                      { token: "number", foreground: "B5CEA8" },
+                      { token: "type", foreground: "4EC9B0" },
+                      { token: "function", foreground: "569CD6" }, // Blue color like JSON delimiters
+                      { token: "variable", foreground: "9CDCFE" },
+                      { token: "identifier", foreground: "9CDCFE" },
+                      { token: "cell-reference", foreground: "9CDCFE" },
+                      { token: "operator", foreground: "D4D4D4" },
+                    ],
+                    colors: {
+                      "editor.background": "#000000",
+                      "editor.foreground": "#D4D4D4",
+                      "editorLineNumber.foreground": "#858585",
+                      "editor.selectionBackground": "#264F78",
+                      "editorCursor.foreground": "#AEAFAD",
+                      "editor.lineHighlightBackground": "#1a1a1a",
+                      "editorIndentGuide.background": "#404040",
+                      "editorIndentGuide.activeBackground": "#707070",
+                    }
+                  });
+                  
+                  // Register excel-formula language
+                  monaco.languages.register({ id: "excel-formula" });
+                  
+                  // Helper function to create snippet template from function signature
+                  // This must be defined before it's used in completion providers and Tab handlers
+                  window.createFunctionSnippet = function(func) {
+                    const signature = func.signature;
+                    // Extract function name and parameters from signature like "IF(logical, value_if_true, value_if_false)"
+                    const match = signature.match(/^(\w+)\s*\((.*)\)$/);
+                    if (!match) {
+                      // If signature doesn't match, return simple template
+                      return func.name + '($1)';
+                    }
+                    
+                    const params = match[2];
+                    if (!params || params.trim() === '') {
+                      // No parameters
+                      return func.name + '()';
+                    }
+                    
+                    // Parse parameters (handle ... for variable args)
+                    const paramList = params.split(',').map(p => p.trim());
+                    let placeholderIndex = 1;
+                    const snippetParams = paramList.map((param, index) => {
+                      if (param.endsWith('...')) {
+                        // Variable arguments - use $1 for first, rest can be added
+                        return '${' + placeholderIndex++ + ':' + param.replace('...', '') + '}';
+                      } else {
+                        return '${' + placeholderIndex++ + ':' + param + '}';
+                      }
+                    });
+                    
+                    return func.name + '(' + snippetParams.join(', ') + ')';
+                  };
+                  
+                  // Load function list and set up tokenizer
+                  import('./hyperformula-functions-monaco.js').then(({ hyperFormulaFunctions }) => {
+                    console.log(`Setting up tokenizer with ${hyperFormulaFunctions.length} HyperFormula functions`);
+                    
+                    // Store function list globally for auto-capitalization and completion
+                    window.hyperFormulaFunctions = hyperFormulaFunctions;
+                    
+                    // Build regex pattern from all function names
+                    const functionNames = hyperFormulaFunctions.map(f => f.name);
+                    // Escape special regex characters and join with |
+                    const functionPattern = functionNames
+                      .map(name => name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+                      .join('|');
+                    
+                    // Set up tokenization rules for excel-formula
+                    monaco.languages.setMonarchTokensProvider("excel-formula", {
+                      tokenizer: {
+                        root: [
+                          // Cell references (e.g., A1, B2, $A$1, Sheet1!A1)
+                          [/[A-Z]+\$?[0-9]+\$?|'[^']*'![A-Z]+\$?[0-9]+\$?/, "cell-reference"],
+                          // Functions - use all HyperFormula function names
+                          [new RegExp(`\\b(${functionPattern})\\b`, 'i'), "function"],
+                          // Numbers (integers and decimals)
+                          [/\d+\.?\d*/, "number"],
+                          // Strings (text in quotes)
+                          [/"([^"\\]|\\.)*"/, "string"],
+                          // Operators
+                          [/[+\-*/=<>]/, "operator"],
+                          // Parentheses and brackets
+                          [/[()]/, "delimiter.parenthesis"],
+                          [/[[\]]/, "delimiter.bracket"],
+                          // Commas and semicolons
+                          [/[,;]/, "delimiter"],
+                          // Whitespace
+                          [/\s+/, ""],
+                          // Everything else
+                          [/./, ""]
+                        ]
+                      }
+                    });
+                    
+                    console.log('Tokenizer set up with function highlighting');
+                  }).catch(err => {
+                    console.error('Failed to load HyperFormula functions for tokenizer:', err);
+                    // Fallback to basic tokenizer if function list fails to load
+                    monaco.languages.setMonarchTokensProvider("excel-formula", {
+                      tokenizer: {
+                        root: [
+                          [/[A-Z]+\$?[0-9]+\$?|'[^']*'![A-Z]+\$?[0-9]+\$?/, "cell-reference"],
+                          [/\d+\.?\d*/, "number"],
+                          [/"([^"\\]|\\.)*"/, "string"],
+                          [/[+\-*/=<>]/, "operator"],
+                          [/[()]/, "delimiter.parenthesis"],
+                          [/[[\]]/, "delimiter.bracket"],
+                          [/[,;]/, "delimiter"],
+                          [/\s+/, ""],
+                          [/./, ""]
+                        ]
+                      }
+                    });
+                  });
+                  
+                  // Set up language configuration
+                  monaco.languages.setLanguageConfiguration("excel-formula", {
+                    comments: {
+                      lineComment: "//",
+                      blockComment: ["/*", "*/"]
+                    },
+                    brackets: [
+                      ["(", ")"],
+                      ["[", "]"]
+                    ],
+                    autoClosingPairs: [
+                      { open: "(", close: ")" },
+                      { open: "[", close: "]" },
+                      { open: '"', close: '"' }
+                    ],
+                    surroundingPairs: [
+                      { open: "(", close: ")" },
+                      { open: "[", close: "]" },
+                      { open: '"', close: '"' }
+                    ]
+                  });
+                  
+                  // Set container height to show 7 lines by default
+                  // fontSize (12) * lineHeight (1.5) * 7 lines = 126px, plus padding = ~150px
+                  monacoEditorContainer.style.height = "150px";
+                  monacoEditorContainer.style.minHeight = "150px";
+                  
+                  // Create initial value with empty first line, then 6 empty lines
+                  const initialValue = "\n\n\n\n\n\n";
+                  
+                  editor = monaco.editor.create(monacoEditorContainer, {
+                    value: initialValue,
+                    language: "excel-formula",
+                    theme: "excel-formula-dark",
+                    automaticLayout: false,
+                    fontSize: 12,
+                    fontFamily: "Consolas, 'Courier New', monospace",
+                    lineNumbers: function(lineNumber) {
+                      // First line shows "=", then start with 1
+                      if (lineNumber === 1) {
+                        return "=";
+                      }
+                      return (lineNumber - 1).toString();
+                    },
+                    minimap: { enabled: false },
+                    scrollBeyondLastLine: false,
+                    readOnly: true,
+                    wordWrap: "on",
+                    lineHeight: 1.5,
+                    tabSize: 2,
+                    renderLineHighlight: "none",
+                    overviewRulerBorder: false,
+                    hideCursorInOverviewRuler: true,
+                    overviewRulerLanes: 0,
+                    folding: true,
+                    foldingStrategy: "indentation",
+                    showFoldingControls: "always",
+                    unfoldOnClickAfterEndOfLine: true,
+                    foldingHighlight: true,
+                    scrollbar: {
+                      vertical: "auto",
+                      horizontal: "auto",
+                      useShadows: false,
+                      verticalHasArrows: false,
+                      horizontalHasArrows: false,
+                    },
+                    // Configure suggest widget to be constrained to editor container
+                    suggest: {
+                      showKeywords: false,
+                      showSnippets: false,
+                      showClasses: false,
+                      showFunctions: true,
+                      showVariables: false,
+                      showModules: false,
+                      showProperties: false,
+                      showValues: false,
+                      showEnums: false,
+                      showStructs: false,
+                      showInterfaces: false,
+                      showOperators: false,
+                      showUnits: false,
+                      showColors: false,
+                      showFiles: false,
+                      showReferences: false,
+                      showFolders: false,
+                      showTypeParameters: false,
+                      showIssues: false,
+                      showUsers: false,
+                      showText: false,
+                      maxVisibleSuggestions: 12,
+                      filterGraceful: true,
+                      shareSuggestSelections: false,
+                      showIcons: true,
+                      showStatusBar: true,
+                      preview: true,
+                      previewMode: 'prefix',
+                      quickSuggestions: {
+                        other: true, // Enable suggestions as you type
+                        comments: false,
+                        strings: false
+                      },
+                      suggestOnTriggerCharacters: false, // Don't trigger on special characters
+                      acceptSuggestionOnCommitCharacter: true,
+                      acceptSuggestionOnEnter: 'off',
+                      acceptSuggestionOnTab: 'on',
+                      snippetSuggestions: 'top',
+                      hideStatusBar: false
+                    },
+                    // Configure parameter hints
+                    parameterHints: {
+                      enabled: true,
+                      cycle: false
+                    }
+                  });
+                  
+                  // Ensure theme is applied
+                  monaco.editor.setTheme("excel-formula-dark");
+                  
+                  // Decorate first line to be light grey and read-only
+                  let firstLineDecoration = null;
+                  function updateFirstLineDecoration() {
+                    const model = editor.getModel();
+                    if (!model) return;
+                    
+                    // Remove existing decoration if any
+                    if (firstLineDecoration) {
+                      editor.deltaDecorations([firstLineDecoration], []);
+                      firstLineDecoration = null;
+                    }
+                    
+                    // Add decoration for first line (light grey, read-only)
+                    firstLineDecoration = editor.deltaDecorations([], [{
+                      range: new monaco.Range(1, 1, 1, model.getLineMaxColumn(1)),
+                      options: {
+                        inlineClassName: 'formula-first-line-readonly',
+                        className: 'formula-first-line-readonly',
+                        isWholeLine: true,
+                        stickiness: monaco.editor.TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges
+                      }
+                    }]);
+                  }
+                  
+                  // Update decoration when model changes
+                  editor.onDidChangeModelContent(() => {
+                    updateFirstLineDecoration();
+                  });
+                  
+                  // Track if we're programmatically setting cursor (to avoid event loop)
+                  window.isProgrammaticCursorChange = false;
+                  window.cursorPositionListener = null;
+                  
+                  // Prevent cursor from being on line 1
+                  window.cursorPositionListener = editor.onDidChangeCursorPosition((e) => {
+                    // Skip if this is a programmatic change
+                    if (window.isProgrammaticCursorChange) {
+                      // Don't reset flag here - let it be reset after cursor is set
+                      return;
+                    }
+                    
+                    if (e.position.lineNumber === 1) {
+                      // Move cursor to line 2, column 1 immediately (no setTimeout)
+                      window.isProgrammaticCursorChange = true;
+                      editor.setPosition({ lineNumber: 2, column: 1 });
+                      // Reset flag after setting position
+                      Promise.resolve().then(() => {
+                        window.isProgrammaticCursorChange = false;
+                      });
+                    }
+                  });
+                  
+                  // Prevent selection on line 1
+                  editor.onDidChangeCursorSelection((e) => {
+                    const selection = e.selection;
+                    if (selection.startLineNumber === 1 || selection.endLineNumber === 1) {
+                      // If selection includes line 1, move it to start at line 2
+                      const newStartLine = Math.max(2, selection.startLineNumber);
+                      const newEndLine = Math.max(2, selection.endLineNumber);
+                      const newStartCol = selection.startLineNumber === 1 ? 1 : selection.startColumn;
+                      const newEndCol = selection.endLineNumber === 1 ? 1 : selection.endColumn;
+                      
+                      setTimeout(() => {
+                        editor.setSelection(new monaco.Range(
+                          newStartLine, newStartCol,
+                          newEndLine, newEndCol
+                        ));
+                      }, 0);
+                    }
+                  });
+                  
+                  // Prevent editing on line 1 - keep it empty
+                  editor.onDidChangeModelContent((e) => {
+                    const model = editor.getModel();
+                    if (!model) return;
+                    
+                    e.changes.forEach(change => {
+                      // If change affects line 1, clear it
+                      if (change.range.startLineNumber === 1 || change.range.endLineNumber === 1) {
+                        const line1Content = model.getLineContent(1);
+                        // If line 1 has any content, clear it
+                        if (line1Content !== "") {
+                          setTimeout(() => {
+                            const edit = {
+                              range: new monaco.Range(1, 1, 1, model.getLineMaxColumn(1)),
+                              text: ""
+                            };
+                            model.pushEditOperations([], [edit], () => null);
+                          }, 0);
+                        }
+                      }
+                    });
+                  });
+                  
+                  // Set initial cursor position to line 2
+                  editor.setPosition({ lineNumber: 2, column: 1 });
+                  
+                  // Initial decoration
+                  updateFirstLineDecoration();
+                  
+                  // Style the first line number ("=") to be light grey
+                  function styleFirstLineNumber() {
+                    const editorDom = monacoEditorContainer;
+                    if (!editorDom) return;
+                    
+                    // Find the first line number element
+                    const lineNumbers = editorDom.querySelectorAll('.monaco-editor .margin-view-overlays .line-numbers .line-number');
+                    if (lineNumbers.length > 0) {
+                      const firstLineNumber = lineNumbers[0];
+                      if (firstLineNumber && firstLineNumber.textContent === "=") {
+                        firstLineNumber.style.color = "#858585"; // Light grey
+                      }
+                    }
+                  }
+                  
+                  // Style immediately and also after layout
+                  setTimeout(styleFirstLineNumber, 100);
+                  editor.onDidLayoutChange(() => {
+                    setTimeout(styleFirstLineNumber, 50);
+                  });
+                  
+                  // Also watch for DOM changes in case line numbers are re-rendered
+                  const observer = new MutationObserver(() => {
+                    styleFirstLineNumber();
+                  });
+                  
+                  if (monacoEditorContainer) {
+                    observer.observe(monacoEditorContainer, {
+                      childList: true,
+                      subtree: true
+                    });
+                  }
+                  
+                  // Throttled layout update for performance
+                  let layoutTimeout = null;
+                  const updateLayout = () => {
+                    if (layoutTimeout) return;
+                    layoutTimeout = requestAnimationFrame(() => {
+                      editor.layout();
+                      layoutTimeout = null;
+                    });
+                  };
+                  
+                  // Only update layout when the editor container actually resizes
+                  const resizeObserver = new ResizeObserver(() => {
+                    updateLayout();
+                  });
+                  resizeObserver.observe(monacoEditorContainer);
+                  
+                  // Initial layout
+                  editor.layout();
+                  
+                  // Constrain suggest widget dimensions to formula editor container
+                  // This ensures autocomplete popup dimensions are constrained to formula pane and doesn't overflow into grid
+                  const formulaEditor = document.querySelector('.formula-editor');
+                  const editorWrapper = document.querySelector('.editor-wrapper');
+                  
+                  if (formulaEditor && editorWrapper) {
+                    // Function to constrain suggest widget - called every time it appears
+                    const constrainSuggestWidget = () => {
+                      const suggestWidget = document.querySelector('.formula-editor .monaco-editor .suggest-widget');
+                      if (!suggestWidget || suggestWidget.style.display === 'none' || suggestWidget.style.visibility === 'hidden') {
+                        return;
+                      }
+                      
+                      // Use requestAnimationFrame to ensure DOM has updated
+                      requestAnimationFrame(() => {
+                        // Get bounding rectangles
+                        const formulaRect = formulaEditor.getBoundingClientRect();
+                        const wrapperRect = editorWrapper.getBoundingClientRect();
+                        const widgetRect = suggestWidget.getBoundingClientRect();
+                        const editorRect = monacoEditorContainer.getBoundingClientRect();
+                        
+                        if (!formulaRect || !widgetRect || !editorRect) return;
+                        
+                        // Calculate available space - must stay within formula editor container
+                        const margin = 10;
+                        
+                        // Maximum width: formula editor width minus margins
+                        // This prevents overflow into the grid area - use the actual formula editor width
+                        const maxWidth = Math.min(
+                          formulaRect.width - (margin * 2),
+                          wrapperRect.width - (margin * 2),
+                          400 // Absolute maximum width
+                        );
+                        
+                        // Maximum height: available space in wrapper, but not more than 300px
+                        const maxHeight = Math.min(
+                          wrapperRect.height - 20, // Leave 20px margin
+                          formulaRect.height - 60, // Leave space for header and editor
+                          300 // Absolute max
+                        );
+                        
+                        // Get current widget dimensions
+                        const currentWidth = widgetRect.width || 300;
+                        const currentHeight = widgetRect.height || 200;
+                        
+                        // Calculate widget position relative to formula editor
+                        const widgetLeftRelative = widgetRect.left - formulaRect.left;
+                        const widgetRightRelative = widgetRect.right - formulaRect.left;
+                        
+                        // Constrain width to fit within formula editor (don't exceed right edge)
+                        let constrainedWidth = Math.min(currentWidth, maxWidth);
+                        
+                        // Ensure right edge doesn't exceed formula editor bounds
+                        const maxRightInFormula = formulaRect.width - margin;
+                        const widgetRightInFormula = widgetLeftRelative + constrainedWidth;
+                        
+                        // Calculate position relative to Monaco editor for setting left/top
+                        const editorLeftRelative = editorRect.left - formulaRect.left;
+                        const editorTopRelative = editorRect.top - formulaRect.top;
+                        
+                        if (widgetRightInFormula > maxRightInFormula) {
+                          // Widget extends too far right - adjust left position
+                          let adjustedLeftInFormula = maxRightInFormula - constrainedWidth;
+                          // But don't go too far left
+                          adjustedLeftInFormula = Math.max(margin, adjustedLeftInFormula);
+                          
+                          // If we still can't fit, reduce width instead
+                          if ((adjustedLeftInFormula + constrainedWidth) > maxRightInFormula) {
+                            constrainedWidth = maxRightInFormula - adjustedLeftInFormula;
+                          }
+                          
+                          // Apply adjusted left position relative to Monaco editor
+                          suggestWidget.style.setProperty('left', `${adjustedLeftInFormula - editorLeftRelative}px`, 'important');
+                        } else {
+                          // Ensure left edge doesn't go too far left
+                          const minLeftInFormula = margin;
+                          if (widgetLeftRelative < minLeftInFormula) {
+                            suggestWidget.style.setProperty('left', `${minLeftInFormula - editorLeftRelative}px`, 'important');
+                          }
+                        }
+                        
+                        // Constrain height
+                        let constrainedHeight = Math.min(currentHeight, maxHeight);
+                        
+                        // Check vertical position - ensure it doesn't overflow bottom of formula editor
+                        const widgetTopInFormula = widgetRect.top - formulaRect.top;
+                        const widgetBottomInFormula = widgetTopInFormula + constrainedHeight;
+                        const maxBottomInFormula = formulaRect.height - margin;
+                        
+                        if (widgetBottomInFormula > maxBottomInFormula) {
+                          // Try to move widget up
+                          const adjustedTopInFormula = maxBottomInFormula - constrainedHeight;
+                          if (adjustedTopInFormula >= margin) {
+                            // Can move up, adjust position
+                            suggestWidget.style.setProperty('top', `${adjustedTopInFormula - editorTopRelative}px`, 'important');
+                          } else {
+                            // Can't move up enough, reduce height instead
+                            constrainedHeight = Math.max(50, maxBottomInFormula - widgetTopInFormula);
+                            suggestWidget.style.setProperty('top', `${margin - editorTopRelative}px`, 'important');
+                          }
+                        }
+                        
+                        // Apply all constraints with !important to override Monaco's styles
+                        suggestWidget.style.setProperty('max-width', `${constrainedWidth}px`, 'important');
+                        suggestWidget.style.setProperty('width', `${constrainedWidth}px`, 'important');
+                        suggestWidget.style.setProperty('max-height', `${constrainedHeight}px`, 'important');
+                        suggestWidget.style.setProperty('height', `${constrainedHeight}px`, 'important');
+                        suggestWidget.style.setProperty('overflow-y', 'auto', 'important');
+                        suggestWidget.style.setProperty('overflow-x', 'hidden', 'important');
+                        suggestWidget.style.setProperty('z-index', '10000', 'important');
+                        suggestWidget.style.setProperty('position', 'absolute', 'important');
+                        
+                        // Force clipping by ensuring right edge doesn't exceed bounds
+                        // Check one more time after setting width
+                        setTimeout(() => {
+                          const updatedWidgetRect = suggestWidget.getBoundingClientRect();
+                          const updatedRightInFormula = updatedWidgetRect.right - formulaRect.left;
+                          if (updatedRightInFormula > maxRightInFormula) {
+                            const overflowAmount = updatedRightInFormula - maxRightInFormula;
+                            const newWidth = constrainedWidth - overflowAmount - margin;
+                            if (newWidth > 100) {
+                              suggestWidget.style.setProperty('width', `${newWidth}px`, 'important');
+                              suggestWidget.style.setProperty('max-width', `${newWidth}px`, 'important');
+                            }
+                          }
+                        }, 0);
+                      });
+                    };
+                    
+                    // Use MutationObserver to catch when suggest widget appears/changes
+                    const observer = new MutationObserver(() => {
+                      constrainSuggestWidget();
+                    });
+                    
+                    // Observe the editor container for suggest widget changes
+                    observer.observe(monacoEditorContainer, {
+                      childList: true,
+                      subtree: true,
+                      attributes: true,
+                      attributeFilter: ['style', 'class']
+                    });
+                    
+                    // Also observe the formula editor for size changes
+                    observer.observe(formulaEditor, {
+                      childList: true,
+                      subtree: true,
+                      attributes: true,
+                      attributeFilter: ['style', 'class']
+                    });
+                    
+                    // Also listen for resize events to re-constrain
+                    const resizeObserver = new ResizeObserver(() => {
+                      constrainSuggestWidget();
+                    });
+                    resizeObserver.observe(formulaEditor);
+                    resizeObserver.observe(monacoEditorContainer);
+                    
+                    // Periodically check and constrain (fallback for cases MutationObserver might miss)
+                    // Use more frequent checking to catch widget immediately when it appears
+                    const constraintInterval = setInterval(() => {
+                      constrainSuggestWidget();
+                    }, 50); // Check every 50ms for faster constraint application
+                    
+                    // Store interval to clear later if needed
+                    window.suggestWidgetConstraintInterval = constraintInterval;
+                    
+                    // Also listen for Monaco's suggest events
+                    editor.onDidChangeCursorPosition(() => {
+                      setTimeout(constrainSuggestWidget, 10);
+                    });
+                    
+                    // Watch for when suggestions are shown/hidden
+                    const suggestController = editor.getContribution('suggestController');
+                    if (suggestController && suggestController.model) {
+                      suggestController.model.onDidChange(() => {
+                        setTimeout(constrainSuggestWidget, 10);
+                      });
+                    }
+                  }
+                  
+                  // Import and register HyperFormula functions for IntelliSense
+                  import('./hyperformula-functions-monaco.js').then(({ hyperFormulaFunctions }) => {
+                    console.log(`Registering ${hyperFormulaFunctions.length} HyperFormula functions for IntelliSense`);
+                    
+                    // Register completion provider for all HyperFormula functions and punctuation
+                    // Note: createFunctionSnippet is already defined on window.createFunctionSnippet
+                    monaco.languages.registerCompletionItemProvider('excel-formula', {
+                      provideCompletionItems: function(model, position, context) {
+                        const suggestions = [];
+                        const word = model.getWordUntilPosition(position);
+                        
+                        // Get current line (skip line 1, so get line 2+)
+                        const allLines = model.getValue().split('\n');
+                        if (allLines.length < 2) return { suggestions };
+                        
+                        const currentLineIndex = position.lineNumber - 1; // Convert to 0-based
+                        if (currentLineIndex < 1) return { suggestions }; // Skip line 1
+                        
+                        const currentLine = allLines[currentLineIndex];
+                        const textBeforeCursor = currentLine.substring(0, position.column - 1);
+                        
+                        // Get the text at the cursor position to better detect what's being typed
+                        const textUntilPosition = model.getValueInRange({
+                          startLineNumber: position.lineNumber,
+                          startColumn: 1,
+                          endLineNumber: position.lineNumber,
+                          endColumn: position.column
+                        });
+                        
+                        // Check if we're in a function call context for comma/parenthesis completion
+                        const functionCallPattern = /\b([A-Za-z]+\w*)\s*\([^)]*$/i;
+                        const functionMatch = textBeforeCursor.match(functionCallPattern);
+                        const isInFunctionCall = functionMatch !== null;
+                        
+                        // Always provide comma and closing parenthesis suggestions (for Tab completion)
+                        // These will be available via Tab key but won't show popup automatically
+                        if (isInFunctionCall) {
+                          const openParens = (textBeforeCursor.match(/\(/g) || []).length;
+                          const closeParens = (textBeforeCursor.match(/\)/g) || []).length;
+                          const hasUnclosedParens = openParens > closeParens;
+                          
+                          if (hasUnclosedParens) {
+                            // Patterns: after string literal, number, cell reference, expression, or closing parenthesis
+                            // Note: Single quotes are reserved by Excel for sheet names, so only check double quotes for strings
+                            const afterStringPattern = /"[^"]*"\s*$/;
+                            const afterNumberPattern = /(\d+(\.\d+)?)\s*$/;
+                            const afterCellRefPattern = /([A-Z]+\$?\d+\$?)\s*$/i;
+                            // Expression pattern: value operator value (like A1 = 2, A1 + 1, etc.)
+                            // Note: Single quotes are reserved by Excel for sheet names
+                            const afterExpressionPattern = /([A-Z]+\$?\d+\$?|\d+|"[^"]*")\s*[+\-*/=<>!]+\s*([A-Z]+\$?\d+\$?|\d+|"[^"]*")\s*$/i;
+                            const afterClosingParenPattern = /\)\s*$/;
+                            
+                            // Check if we need a comma (after a complete argument)
+                            const needsComma = afterStringPattern.test(textBeforeCursor) || 
+                                              afterNumberPattern.test(textBeforeCursor) || 
+                                              afterCellRefPattern.test(textBeforeCursor) ||
+                                              afterExpressionPattern.test(textBeforeCursor) ||
+                                              afterClosingParenPattern.test(textBeforeCursor);
+                            
+                            if (needsComma) {
+                              // Add comma as tab-completable suggestion (highest priority)
+                              suggestions.push({
+                                label: ',',
+                                kind: monaco.languages.CompletionItemKind.Snippet,
+                                insertText: ', ',
+                                detail: 'Comma separator',
+                                documentation: 'Press Tab to add comma',
+                                range: {
+                                  startLineNumber: position.lineNumber,
+                                  endLineNumber: position.lineNumber,
+                                  startColumn: position.column,
+                                  endColumn: position.column
+                                },
+                                sortText: '0000', // Highest priority
+                                preselect: true // Auto-select for Tab
+                              });
+                            }
+                            
+                            // Check if we need a closing parenthesis
+                            // Get the function call text
+                            const functionCallText = textBeforeCursor.substring(functionMatch.index);
+                            const argsMatch = functionCallText.match(/\((.+)$/);
+                            
+                            if (argsMatch) {
+                              const args = argsMatch[1];
+                              // Count commas to see how many arguments we have
+                              const argCount = (args.match(/,/g) || []).length + 1;
+                              
+                              // Check if we're at the end of what looks like a complete argument
+                              const trimmedArgs = args.trim();
+                              // Match: ends with value, cell ref, string, number, or expression
+                              // Note: Single quotes are reserved by Excel for sheet names
+                              const endsWithCompleteArg = /([A-Z]+\$?\d+\$?|\d+|"[^"]*"|\)|[A-Z]+\$?\d+\$?|\d+|"[^"]*")\s*[+\-*/=<>!]+\s*([A-Z]+\$?\d+\$?|\d+|"[^"]*")\s*$/i.test(trimmedArgs) ||
+                                                          /([A-Z]+\$?\d+\$?|\d+|"[^"]*"|\))\s*$/i.test(trimmedArgs);
+                              
+                              // Check if there's already a closing paren after cursor
+                              const textAfterCursor = currentLine.substring(position.column - 1);
+                              const hasClosingParen = textAfterCursor.trim().startsWith(')');
+                              
+                              // If we have at least one complete argument and no closing paren, suggest it
+                              if (endsWithCompleteArg && argCount >= 1 && !hasClosingParen) {
+                                suggestions.push({
+                                  label: ')',
+                                  kind: monaco.languages.CompletionItemKind.Snippet,
+                                  insertText: ')',
+                                  detail: 'Close parenthesis',
+                                  documentation: 'Press Tab to close function',
+                                  range: {
+                                    startLineNumber: position.lineNumber,
+                                    endLineNumber: position.lineNumber,
+                                    startColumn: position.column,
+                                    endColumn: position.column
+                                  },
+                                  sortText: '0001', // Second highest priority
+                                  preselect: !needsComma // Auto-select if comma not needed
+                                });
+                              }
+                            }
+                          }
+                        }
+                        
+                        // Now add function suggestions with snippet templates
+                        // Get the actual word being typed - case insensitive
+                        const wordMatch = textBeforeCursor.match(/([A-Za-z_][A-Za-z0-9_]*)$/i);
+                        const actualWord = wordMatch ? wordMatch[1] : word.word;
+                        
+                        // Check if the word looks like a cell reference (like "a1", "B2", "A$1", "$A$1")
+                        // Pattern: 1-3 letters followed by optional $, then digits, optionally followed by $
+                        const isCellReference = /^[A-Z]{1,3}\$?\d+\$?$/i.test(actualWord);
+                        
+                        // Show function suggestions if typing a word
+                        // Case-insensitive - allow completion even when not in function call
+                        if (actualWord && actualWord.length >= 1) {
+                          // Determine if we're typing a cell reference
+                          // Check if what we've typed so far looks like a cell reference
+                          const beforeWord = textBeforeCursor.substring(0, textBeforeCursor.length - actualWord.length);
+                          const fullWordSoFar = beforeWord + actualWord;
+                          // Pattern: letters (1-3) optionally followed by $ and digits
+                          // This is more lenient - if it's clearly a cell ref pattern, don't show functions
+                          const looksLikeCellRef = /^[A-Z]{1,3}\$?\d*$/i.test(fullWordSoFar);
+                          
+                          // Don't show function suggestions if:
+                          // 1. It's a complete cell reference (letters + digits), AND
+                          // 2. It's not being explicitly invoked (Ctrl+Space), AND
+                          // 3. It's short (2-4 chars) - longer words are more likely to be function names
+                          const shouldSuppressForCellRef = isCellReference && 
+                                                          context.triggerKind !== monaco.languages.CompletionTriggerKind.Invoke &&
+                                                          actualWord.length <= 4;
+                          
+                          // Don't show function suggestions if we're inside a function call (already typed function)
+                          // But allow if we're just typing the function name
+                          const isTypingFunctionName = !isInFunctionCall || textBeforeCursor.trim() === actualWord;
+                          
+                          // Show suggestions if:
+                          // 1. Not a cell reference suppression case, OR
+                          // 2. Explicitly invoked (Ctrl+Space), OR
+                          // 3. Word is long enough to be a function (3+ chars), OR
+                          // 4. Doesn't look like a cell reference
+                          const shouldShowSuggestions = (!shouldSuppressForCellRef || 
+                                                         context.triggerKind === monaco.languages.CompletionTriggerKind.Invoke ||
+                                                         actualWord.length >= 3 ||
+                                                         !looksLikeCellRef) &&
+                                                         isTypingFunctionName;
+                          
+                          if (shouldShowSuggestions) {
+                            // Use global function list if available
+                            if (!window.hyperFormulaFunctions || window.hyperFormulaFunctions.length === 0) {
+                              return { suggestions }; // Function list not loaded yet
+                            }
+                            const wordUpper = actualWord.toUpperCase();
+                            const functionSuggestions = window.hyperFormulaFunctions
+                              .filter(func => {
+                                // Case-insensitive matching - exact match or starts with typed text
+                                return func.name.toUpperCase().startsWith(wordUpper);
+                              })
+                              .map(func => {
+                                // Calculate the correct range based on actual word
+                                const wordStart = textUntilPosition.length - actualWord.length;
+                                const correctRange = {
+                                  startLineNumber: position.lineNumber,
+                                  endLineNumber: position.lineNumber,
+                                  startColumn: wordStart + 1,
+                                  endColumn: position.column
+                                };
+                                
+                                // Create snippet template from function signature
+                                // For IF: IF(logical, value, value) becomes IF(${1:logical}, ${2:value}, ${3:value})
+                                const snippetTemplate = window.createFunctionSnippet(func);
+                                
+                                return {
+                                  label: func.name,
+                                  kind: monaco.languages.CompletionItemKind.Function,
+                                  insertText: snippetTemplate,
+                                  insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+                                  documentation: {
+                                    value: func.description 
+                                      ? `**${func.name}**\n\n${func.description}\n\n**Syntax:** \`${func.signature}\``
+                                      : `**${func.name}**\n\n**Syntax:** \`${func.signature}\``
+                                  },
+                                  range: correctRange,
+                                  detail: func.signature,
+                                  sortText: '1000', // Lower priority than punctuation
+                                  preselect: func.name.toUpperCase() === wordUpper // Auto-select on exact match
+                                };
+                              });
+                            
+                            suggestions.push(...functionSuggestions);
+                          }
+                        }
+
+                        return { suggestions };
+                      },
+                      triggerCharacters: [] // No automatic triggers - Tab completes suggestions
+                    });
+
+                    // Register hover provider for function documentation
+                    monaco.languages.registerHoverProvider('excel-formula', {
+                      provideHover: function(model, position) {
+                        const word = model.getWordAtPosition(position);
+                        if (!word) return null;
+
+                        const funcName = word.word.toUpperCase();
+                        const func = hyperFormulaFunctions.find(f => f.name.toUpperCase() === funcName);
+                        
+                        if (func) {
+                          return {
+                            range: new monaco.Range(
+                              position.lineNumber,
+                              word.startColumn,
+                              position.lineNumber,
+                              word.endColumn
+                            ),
+                            contents: [
+                              { value: `**${func.name}**` },
+                              func.description ? { value: func.description } : null,
+                              { value: `\`${func.signature}\`` }
+                            ].filter(Boolean)
+                          };
+                        }
+                        return null;
+                      }
+                    });
+                    
+                    // Register diagnostics provider for formula validation
+                    monaco.languages.registerDocumentFormattingEditProvider('excel-formula', {
+                      provideDocumentFormattingEdits: function(model, options, token) {
+                        return [];
+                      }
+                    });
+                    
+                    // Register diagnostics provider to validate formulas
+                    monaco.languages.registerDocumentRangeFormattingEditProvider('excel-formula', {
+                      provideDocumentRangeFormattingEdits: function(model, range, options, token) {
+                        return [];
+                      }
+                    });
+                    
+                    // Custom diagnostics provider for formula validation
+                    const diagnosticsProvider = {
+                      provideDiagnostics: function(model, lastResult) {
+                        const diagnostics = [];
+                        const text = model.getValue();
+                        
+                        // Skip first line (the "=" visual indicator line)
+                        const lines = text.split('\n');
+                        if (lines.length < 2) return { markers: [] };
+                        
+                        // Get formula starting from line 2
+                        const formulaText = lines.slice(1).join('\n').trim();
+                        if (!formulaText) return { markers: [] };
+                        
+                        // Check for common syntax errors
+                        // 1. Check for periods in function arguments (should be commas)
+                        // Need to check if we're in a function context and if parentheses are closed
+                        const openParens = (formulaText.match(/\(/g) || []).length;
+                        const closeParens = (formulaText.match(/\)/g) || []).length;
+                        const hasUnclosedParens = openParens > closeParens;
+                        
+                        // Pattern: value followed by period (in function context)
+                        // Match periods that appear after values in function calls
+                        // Note: Single quotes are reserved by Excel for sheet names
+                        const periodPattern = /(\w+|"[^"]*"|[A-Z]+\$?\d+\$?)\s*\./g;
+                        let match;
+                        while ((match = periodPattern.exec(formulaText)) !== null) {
+                          // Calculate line and column in the editor
+                          const beforeMatch = formulaText.substring(0, match.index);
+                          const formulaLines = beforeMatch.split('\n');
+                          const formulaLineIndex = formulaLines.length - 1;
+                          const editorLineNumber = formulaLineIndex + 2; // +2 because line 1 is skipped, +1 for 1-based
+                          const periodColumn = formulaLines[formulaLineIndex].length + match[1].length + 1; // Position of period
+                          
+                          // Check if we're in a function call context
+                          const textBeforePeriod = formulaText.substring(0, match.index + match[0].length);
+                          const functionCallPattern = /\b([A-Z]+\w*)\s*\(/;
+                          const isInFunction = functionCallPattern.test(textBeforePeriod);
+                          
+                          if (isInFunction) {
+                            if (hasUnclosedParens) {
+                              // Function parentheses not closed - squiggle just the period
+                              diagnostics.push({
+                                severity: monaco.MarkerSeverity.Error,
+                                startLineNumber: editorLineNumber,
+                                startColumn: periodColumn,
+                                endLineNumber: editorLineNumber,
+                                endColumn: periodColumn + 1,
+                                message: 'Expected comma (,) instead of period (.)',
+                                source: 'Formula Validator',
+                                code: 'PUNCTUATION_ERROR'
+                              });
+                            } else {
+                              // Function parentheses are closed - squiggle the entire function
+                              // Find the start of the function
+                              const functionMatch = textBeforePeriod.match(/\b([A-Z]+\w*)\s*\(/);
+                              if (functionMatch) {
+                                const functionStart = functionMatch.index;
+                                const functionStartLines = formulaText.substring(0, functionStart).split('\n');
+                                const functionStartLineIndex = functionStartLines.length - 1;
+                                const functionStartEditorLine = functionStartLineIndex + 2;
+                                const functionStartColumn = functionStartLines[functionStartLineIndex].length + 1;
+                                
+                                // Find the end of the function (last closing paren)
+                                const lastCloseParen = formulaText.lastIndexOf(')');
+                                const functionEndLines = formulaText.substring(0, lastCloseParen + 1).split('\n');
+                                const functionEndLineIndex = functionEndLines.length - 1;
+                                const functionEndEditorLine = functionEndLineIndex + 2;
+                                const functionEndColumn = functionEndLines[functionEndLineIndex].length;
+                                
+                                diagnostics.push({
+                                  severity: monaco.MarkerSeverity.Error,
+                                  startLineNumber: functionStartEditorLine,
+                                  startColumn: functionStartColumn,
+                                  endLineNumber: functionEndEditorLine,
+                                  endColumn: functionEndColumn,
+                                  message: 'Expected comma (,) instead of period (.)',
+                                  source: 'Formula Validator',
+                                  code: 'PUNCTUATION_ERROR'
+                                });
+                              }
+                            }
+                          }
+                        }
+                        
+                        // 2. Check for double commas
+                        const doubleCommaRegex = /,\s*,/g;
+                        while ((match = doubleCommaRegex.exec(formulaText)) !== null) {
+                          const beforeMatch = formulaText.substring(0, match.index);
+                          const formulaLines = beforeMatch.split('\n');
+                          const formulaLineIndex = formulaLines.length - 1;
+                          const editorLineNumber = formulaLineIndex + 2; // +2 because line 1 is skipped, +1 for 1-based
+                          const column = formulaLines[formulaLineIndex].length + 1; // +1 for 1-based
+                          
+                          diagnostics.push({
+                            severity: monaco.MarkerSeverity.Warning,
+                            startLineNumber: editorLineNumber,
+                            startColumn: column,
+                            endLineNumber: editorLineNumber,
+                            endColumn: column + 1,
+                            message: 'Unexpected comma',
+                            source: 'Formula Validator',
+                            code: 'DOUBLE_COMMA'
+                          });
+                        }
+                        
+                        // 3. Validate formula syntax with HyperFormula if available
+                        // Only validate if the formula looks complete (has closing parens, etc.)
+                        if (window.hf && formulaText) {
+                          try {
+                            // Ensure formula starts with '='
+                            const testFormula = formulaText.startsWith('=') ? formulaText : '=' + formulaText;
+                            
+                            // Check for common syntax errors first (parentheses, periods, etc.)
+                            const openParens = (formulaText.match(/\(/g) || []).length;
+                            const closeParens = (formulaText.match(/\)/g) || []).length;
+                            
+                            // Only validate with HyperFormula if the formula looks syntactically complete
+                            // Don't validate incomplete formulas (missing closing parens, etc.)
+                            // This prevents false positives for formulas that are still being typed
+                            const isLikelyComplete = openParens === closeParens && formulaText.trim().length > 0;
+                            
+                            if (isLikelyComplete) {
+                              // Try to validate the formula by attempting to set it in a test cell
+                              // Use a very high cell address that won't interfere with actual data
+                              const testRow = 99999;
+                              const testCol = 99999;
+                              const testSheetId = 0;
+                              
+                              try {
+                                // Try to set the formula in a test location
+                                // This will throw an error if the formula syntax is invalid
+                                window.hf.setCellContents({ col: testCol, row: testRow, sheet: testSheetId }, [[testFormula]]);
+                                
+                                // If successful, clear the test cell immediately
+                                window.hf.setCellContents({ col: testCol, row: testRow, sheet: testSheetId }, [['']]);
+                                
+                                // Formula is valid - no error markers needed
+                                
+                              } catch (formulaError) {
+                                // Formula might be invalid, but check error type
+                                // Some errors are runtime errors (like #REF!, #NAME?, etc.) not syntax errors
+                                const errorMessage = (formulaError.message || '').toLowerCase();
+                                const errorString = String(formulaError).toLowerCase();
+                                const fullError = errorMessage + ' ' + errorString;
+                                
+                                // Only mark as syntax error if it's actually a syntax/parse error
+                                // Runtime errors like #REF!, #NAME?, #VALUE!, etc. are not syntax errors
+                                // Also ignore errors about unknown addresses (cells that don't exist yet)
+                                // HyperFormula often throws errors for valid formulas if referenced cells don't exist
+                                const isSyntaxError = (fullError.includes('parse') || 
+                                                     fullError.includes('syntax') ||
+                                                     fullError.includes('unexpected token') ||
+                                                     fullError.includes('invalid character') ||
+                                                     fullError.includes('cannot parse') ||
+                                                     fullError.includes('parsing error')) &&
+                                                     !fullError.includes('unknown') &&
+                                                     !fullError.includes('address') &&
+                                                     !fullError.includes('cell') &&
+                                                     !fullError.includes('reference') &&
+                                                     !fullError.includes('ref') &&
+                                                     !fullError.includes('name') &&
+                                                     !fullError.includes('value') &&
+                                                     !fullError.includes('div') &&
+                                                     !fullError.includes('num') &&
+                                                     !fullError.includes('na') &&
+                                                     !fullError.includes('error') &&
+                                                     !fullError.includes('#');
+                                
+                                // Don't mark errors for valid formulas - most HyperFormula errors are runtime, not syntax
+                                // Only mark if it's clearly a parse/syntax error
+                                if (isSyntaxError) {
+                                  // Mark as syntax error
+                                  const formulaStart = formulaText.startsWith('=') ? 1 : 0;
+                                  diagnostics.push({
+                                    severity: monaco.MarkerSeverity.Error,
+                                    startLineNumber: 2, // Line 2 is where formula starts
+                                    startColumn: formulaStart + 1,
+                                    endLineNumber: 2,
+                                    endColumn: Math.min(formulaText.length + 1, 200),
+                                    message: 'Invalid formula syntax',
+                                    source: 'HyperFormula',
+                                    code: 'SYNTAX_ERROR'
+                                  });
+                                }
+                                // If it's a runtime error (like #REF!, #NAME?), don't mark it - those are valid formulas
+                                // If it's an unknown address error, don't mark it - the cell might not exist yet
+                              }
+                            } else {
+                              // Formula is incomplete - only check for obvious syntax errors
+                              if (openParens > closeParens) {
+                                // Missing closing parenthesis - but only mark if formula looks complete otherwise
+                                // Don't mark if user is still typing
+                                const lastOpenParen = formulaText.lastIndexOf('(');
+                                if (lastOpenParen > 0) {
+                                  // Check if there's content after the last open paren
+                                  const afterLastParen = formulaText.substring(lastOpenParen + 1);
+                                  // Only mark as error if there's significant content after the last paren
+                                  // This prevents marking incomplete formulas as errors
+                                  if (afterLastParen.trim().length > 0 && !afterLastParen.match(/^\s*$/)) {
+                                    const formulaLines = formulaText.substring(0, lastOpenParen + 1).split('\n');
+                                    const lineNum = formulaLines.length;
+                                    const colNum = formulaLines[formulaLines.length - 1].length;
+                                    
+                                    diagnostics.push({
+                                      severity: monaco.MarkerSeverity.Warning, // Use warning instead of error for incomplete formulas
+                                      startLineNumber: lineNum + 1, // +1 because line 1 is the "=" line
+                                      startColumn: colNum + 1,
+                                      endLineNumber: lineNum + 1,
+                                      endColumn: colNum + 2,
+                                      message: 'Missing closing parenthesis',
+                                      source: 'Formula Validator',
+                                      code: 'MISSING_PARENTHESIS'
+                                    });
+                                  }
+                                }
+                              } else if (closeParens > openParens) {
+                                // Extra closing parenthesis - always mark this as an error
+                                let unmatchedCount = 0;
+                                let firstUnmatched = -1;
+                                for (let i = 0; i < formulaText.length; i++) {
+                                  if (formulaText[i] === '(') unmatchedCount++;
+                                  if (formulaText[i] === ')') {
+                                    unmatchedCount--;
+                                    if (unmatchedCount < 0 && firstUnmatched === -1) {
+                                      firstUnmatched = i;
+                                      break;
+                                    }
+                                  }
+                                }
+                                
+                                if (firstUnmatched !== -1) {
+                                  const formulaLines = formulaText.substring(0, firstUnmatched + 1).split('\n');
+                                  const lineNum = formulaLines.length;
+                                  const colNum = formulaLines[formulaLines.length - 1].length;
+                                  
+                                  diagnostics.push({
+                                    severity: monaco.MarkerSeverity.Error,
+                                    startLineNumber: lineNum + 1,
+                                    startColumn: colNum,
+                                    endLineNumber: lineNum + 1,
+                                    endColumn: colNum + 1,
+                                    message: 'Extra closing parenthesis',
+                                    source: 'Formula Validator',
+                                    code: 'EXTRA_PARENTHESIS'
+                                  });
+                                }
+                              }
+                            }
+                          } catch (e) {
+                            // If validation completely fails, don't mark anything
+                            // This prevents false positives
+                          }
+                        }
+                        
+                        return { markers: diagnostics };
+                      }
+                    };
+                    
+                    // Use Monaco's markers API to set diagnostics
+                    function validateFormula() {
+                      const model = editor.getModel();
+                      if (!model) return;
+                      
+                      const diagnostics = diagnosticsProvider.provideDiagnostics(model, null);
+                      monaco.editor.setModelMarkers(model, 'formula-validator', diagnostics.markers);
+                    }
+                    
+                    // Validate on content change (with debounce for performance)
+                    let validationTimeout;
+                    editor.onDidChangeModelContent(() => {
+                      clearTimeout(validationTimeout);
+                      validationTimeout = setTimeout(() => {
+                        validateFormula();
+                      }, 300); // Debounce validation to avoid performance issues
+                    });
+                    
+                    // Auto-capitalize function names (unless inside quotes)
+                    let capitalizeTimeout;
+                    editor.onDidChangeModelContent((e) => {
+                      // Skip if this is a programmatic change
+                      if (window.isProgrammaticCursorChange) return;
+                      
+                      clearTimeout(capitalizeTimeout);
+                      capitalizeTimeout = setTimeout(() => {
+                        const model = editor.getModel();
+                        if (!model) return;
+                        
+                        const position = editor.getPosition();
+                        if (!position || position.lineNumber < 2) return; // Skip line 1
+                        
+                        // Get current line (skip line 1, so get line 2+)
+                        const allLines = model.getValue().split('\n');
+                        if (allLines.length < 2) return;
+                        
+                        const currentLineIndex = position.lineNumber - 1;
+                        if (currentLineIndex < 1) return; // Skip line 1
+                        
+                        const currentLine = allLines[currentLineIndex];
+                        const textBeforeCursor = currentLine.substring(0, position.column - 1);
+                        const textAfterCursor = currentLine.substring(position.column - 1);
+                        const fullLine = currentLine;
+                        
+                        // Check if cursor is inside quotes (strings)
+                        // Only check double quotes - single quotes are reserved by Excel for sheet names
+                        function isInsideQuotes(text, position) {
+                          // Count unescaped double quotes before cursor
+                          let inDoubleQuotes = false;
+                          let escaped = false;
+                          
+                          for (let i = 0; i < position; i++) {
+                            const char = text[i];
+                            if (escaped) {
+                              escaped = false;
+                              continue;
+                            }
+                            if (char === '\\') {
+                              escaped = true;
+                              continue;
+                            }
+                            if (char === '"') {
+                              inDoubleQuotes = !inDoubleQuotes;
+                            }
+                          }
+                          
+                          return inDoubleQuotes;
+                        }
+                        
+                        // Don't capitalize if we're inside quotes
+                        if (isInsideQuotes(fullLine, position.column - 1)) {
+                          return;
+                        }
+                        
+                        // Find function names in the line and capitalize them
+                        // Match word boundaries followed by function names
+                        // Use global function list if available
+                        if (!window.hyperFormulaFunctions || window.hyperFormulaFunctions.length === 0) {
+                          return; // Function list not loaded yet
+                        }
+                        const functionNames = window.hyperFormulaFunctions.map(f => f.name);
+                        const edits = [];
+                        
+                        // Build regex to match function names (case-insensitive, word boundaries)
+                        functionNames.forEach(funcName => {
+                          // Escape special regex characters
+                          const escapedName = funcName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                          // Match function name at word boundary, case-insensitive
+                          const regex = new RegExp(`\\b(${escapedName})\\b`, 'gi');
+                          
+                          let match;
+                          while ((match = regex.exec(fullLine)) !== null) {
+                            const matchedText = match[0];
+                            const matchedName = match[1];
+                            
+                            // Check if this match is inside quotes
+                            if (isInsideQuotes(fullLine, match.index + matchedText.length)) {
+                              continue; // Skip if inside quotes
+                            }
+                            
+                            // Only capitalize if it's not already the correct case
+                            if (matchedText !== funcName) {
+                              // Check what's before the function name
+                              const beforeChar = match.index > 0 ? fullLine[match.index - 1] : '';
+                              const isValidBefore = match.index === 0 || /[^A-Za-z0-9_$]/.test(beforeChar);
+                              
+                              // Check what's after the function name
+                              const afterText = fullLine.substring(match.index + matchedText.length);
+                              // After the function name should be:
+                              // - Opening parenthesis (function call)
+                              // - Space or end of line (standalone function name)
+                              // - Non-alphanumeric character (part of expression)
+                              // - Empty (cursor is right after the function name)
+                              const isValidAfter = afterText.length === 0 || 
+                                                   /^\s*\(/.test(afterText) || 
+                                                   /^\s*$/.test(afterText) || 
+                                                   /^\s*[^A-Za-z0-9_]/.test(afterText);
+                              
+                              // Capitalize if:
+                              // 1. It's preceded by valid character (start of line, operator, etc.) OR at start of line
+                              // 2. It's followed by valid character (opening paren, space, end, etc.)
+                              // This allows capitalization as you type, even before the opening paren
+                              if (isValidBefore && isValidAfter) {
+                                edits.push({
+                                  range: new monaco.Range(
+                                    currentLineIndex + 1,
+                                    match.index + 1,
+                                    currentLineIndex + 1,
+                                    match.index + matchedText.length + 1
+                                  ),
+                                  text: funcName
+                                });
+                              }
+                            }
+                          }
+                        });
+                        
+                        // Auto-capitalize cell references (like "a1" -> "A1")
+                        // Match cell references: 1-3 lowercase letters followed by digits, optionally with $ anchors
+                        // Use a simpler pattern that matches cell references more reliably
+                        const cellRefPattern = /([a-z]{1,3})(\$?)(\d+)(\$?)/gi;
+                        let cellMatch;
+                        const processedRanges = []; // Track processed ranges to avoid duplicates
+                        
+                        while ((cellMatch = cellRefPattern.exec(fullLine)) !== null) {
+                          const colPart = cellMatch[1]; // lowercase column letters
+                          const dollarBeforeCol = cellMatch[2] || ''; // $ before column (if any)
+                          const rowPart = cellMatch[3]; // row number
+                          const dollarBeforeRow = cellMatch[4] || ''; // $ before row (if any)
+                          
+                          // Reconstruct the full matched cell reference
+                          const matchedText = colPart + dollarBeforeCol + rowPart + dollarBeforeRow;
+                          const matchStartIndex = cellMatch.index;
+                          const matchEndIndex = matchStartIndex + matchedText.length;
+                          
+                          // Check if this range was already processed (avoid duplicates from overlapping matches)
+                          const alreadyProcessed = processedRanges.some(range => 
+                            matchStartIndex >= range.start && matchEndIndex <= range.end
+                          );
+                          if (alreadyProcessed) continue;
+                          processedRanges.push({ start: matchStartIndex, end: matchEndIndex });
+                          
+                          // Skip if inside quotes
+                          if (isInsideQuotes(fullLine, matchEndIndex)) {
+                            continue;
+                          }
+                          
+                          // Check what's before and after the cell reference
+                          const beforeChar = matchStartIndex > 0 ? fullLine[matchStartIndex - 1] : '';
+                          const afterChar = matchEndIndex < fullLine.length ? fullLine[matchEndIndex] : '';
+                          
+                          // Valid if preceded by operator, comma, parenthesis, space, or start of line
+                          // But not by a letter or digit (would be part of a larger word)
+                          const isValidBefore = matchStartIndex === 0 || /[^A-Za-z0-9_]/.test(beforeChar);
+                          
+                          // Valid if followed by operator, comma, parenthesis, space, or end of line
+                          // But not by a letter or digit (would be part of a larger word)
+                          const isValidAfter = matchEndIndex >= fullLine.length || 
+                                               /[^A-Za-z0-9_]/.test(afterChar);
+                          
+                          // Only capitalize if it looks like a valid cell reference context and column is lowercase
+                          if (isValidBefore && isValidAfter && colPart === colPart.toLowerCase()) {
+                            // Build new cell reference with uppercase column, preserving $ anchors
+                            let newCellRef = colPart.toUpperCase();
+                            if (dollarBeforeCol) {
+                              newCellRef = '$' + newCellRef;
+                            }
+                            newCellRef += rowPart;
+                            if (dollarBeforeRow) {
+                              newCellRef += '$';
+                            }
+                            
+                            // Only edit if different
+                            if (matchedText !== newCellRef) {
+                              edits.push({
+                                range: new monaco.Range(
+                                  currentLineIndex + 1,
+                                  matchStartIndex + 1,
+                                  currentLineIndex + 1,
+                                  matchEndIndex + 1
+                                ),
+                                text: newCellRef
+                              });
+                            }
+                          }
+                        }
+                        
+                        // Apply edits if any
+                        if (edits.length > 0) {
+                          // Set flag to prevent recursive changes
+                          window.isProgrammaticCursorChange = true;
+                          editor.executeEdits('auto-capitalize-functions', edits);
+                          // Reset flag after a microtask
+                          Promise.resolve().then(() => {
+                            window.isProgrammaticCursorChange = false;
+                          });
+                        }
+                      }, 100); // Small delay to allow typing to complete
+                    });
+                    
+                    // Auto-expand function snippets when opening parenthesis is typed
+                    // Example: typing "IF(" should expand to "IF(${1:logical}, ${2:value}, ${3:value})"
+                    editor.onDidChangeModelContent((e) => {
+                      // Skip if this is a programmatic change
+                      if (window.isProgrammaticCursorChange) return;
+                      
+                      // Check each change to see if it's just an opening parenthesis
+                      e.changes.forEach(change => {
+                        // Only process changes that add text (not deletions)
+                        if (change.text === '(') {
+                          const model = editor.getModel();
+                          if (!model) return;
+                          
+                          // Get the line where the change occurred
+                          const changeLine = change.range.startLineNumber;
+                          if (changeLine < 2) return; // Skip line 1
+                          
+                          // Get the current line content (after the change - the ( has been inserted)
+                          const currentLine = model.getLineContent(changeLine);
+                          
+                          // Get text before the opening parenthesis that was just inserted
+                          // The ( is at startColumn, so text before it is from 0 to startColumn-1
+                          const textBeforeParen = currentLine.substring(0, change.range.startColumn - 1);
+                          
+                          // Check if we're inside quotes
+                          function isInsideQuotes(text, position) {
+                            let inDoubleQuotes = false;
+                            let escaped = false;
+                            for (let i = 0; i < position; i++) {
+                              const char = text[i];
+                              if (escaped) {
+                                escaped = false;
+                                continue;
+                              }
+                              if (char === '\\') {
+                                escaped = true;
+                                continue;
+                              }
+                              if (char === '"') {
+                                inDoubleQuotes = !inDoubleQuotes;
+                              }
+                            }
+                            return inDoubleQuotes;
+                          }
+                          
+                          // Don't expand if inside quotes
+                          if (isInsideQuotes(textBeforeParen, textBeforeParen.length)) {
+                            return;
+                          }
+                          
+                          // Match a function name immediately before the opening parenthesis
+                          // Pattern: function name followed by optional whitespace and then (
+                          const functionNamePattern = /([A-Za-z_][A-Za-z0-9_]*)\s*$/;
+                          const match = textBeforeParen.match(functionNamePattern);
+                          
+                          if (match) {
+                            const funcName = match[1];
+                            
+                            // Check if this matches a function name (case-insensitive)
+                            if (window.hyperFormulaFunctions && window.hyperFormulaFunctions.length > 0) {
+                              const funcNameUpper = funcName.toUpperCase();
+                              const matchingFunction = window.hyperFormulaFunctions.find(func => 
+                                func.name.toUpperCase() === funcNameUpper
+                              );
+                              
+                              if (matchingFunction) {
+                                // Don't expand if it's already a snippet (check if there's already placeholders after the paren)
+                                const textAfterParen = currentLine.substring(change.range.endColumn - 1);
+                                if (textAfterParen.includes('${') || textAfterParen.includes('$1')) {
+                                  return; // Already expanded
+                                }
+                                
+                                // Also check if the function name + ( is already part of a snippet
+                                // (e.g., if user already typed IF(${1:...))
+                                const textWithFuncAndParen = currentLine.substring(
+                                  change.range.startColumn - funcName.length - 1,
+                                  change.range.endColumn
+                                );
+                                if (textWithFuncAndParen.includes('${')) {
+                                  return; // Already part of a snippet
+                                }
+                                
+                                // Check that it's not a cell reference (like A1() - though unlikely)
+                                const isCellReference = /^[A-Z]{1,3}\$?\d+\$?$/i.test(funcName);
+                                if (isCellReference) {
+                                  return; // Don't expand cell references
+                                }
+                                
+                                // Found a matching function - expand to snippet
+                                // We need to replace "FUNCTION_NAME(" with the full snippet
+                                if (!window.createFunctionSnippet) {
+                                  console.error('createFunctionSnippet is not defined!');
+                                  return;
+                                }
+                                
+                                const snippetTemplate = window.createFunctionSnippet(matchingFunction);
+                                if (!snippetTemplate) {
+                                  return;
+                                }
+                                
+                                // Calculate the range: from start of function name to after the opening paren
+                                const funcNameStartCol = change.range.startColumn - funcName.length;
+                                const funcNameEndCol = change.range.endColumn; // After the (
+                                
+                                const replaceRange = new monaco.Range(
+                                  changeLine,
+                                  funcNameStartCol,
+                                  changeLine,
+                                  funcNameEndCol
+                                );
+                                
+                                // Use snippet controller to insert the snippet
+                                // This will properly activate snippet mode
+                                window.isProgrammaticCursorChange = true;
+                                
+                                try {
+                                  const snippetController = editor.getContribution('snippetController2');
+                                  if (snippetController) {
+                                    // Set selection to the function name + (
+                                    editor.setSelection(replaceRange);
+                                    // Insert the snippet - this will replace the selection
+                                    snippetController.insert(snippetTemplate);
+                                    console.log('Auto-expanded function snippet:', matchingFunction.name);
+                                  } else {
+                                    throw new Error('SnippetController2 not available');
+                                  }
+                                } catch (e) {
+                                  console.error('Failed to auto-expand snippet:', e);
+                                  // Fallback: just leave it as is
+                                }
+                                
+                                // Reset flag after a microtask
+                                Promise.resolve().then(() => {
+                                  window.isProgrammaticCursorChange = false;
+                                });
+                              }
+                            }
+                          }
+                        }
+                      });
+                    });
+                    
+                    // Initial validation
+                    setTimeout(validateFormula, 100);
+                    
+                    console.log('HyperFormula IntelliSense registered successfully');
+                  }).catch(err => {
+                    console.error('Failed to load HyperFormula functions:', err);
+                  });
+                  
+                  // Set up Tab key handler for comma/parenthesis completion and function snippet insertion
+                  // Priority: If IntelliSense is showing, let Monaco accept the suggestion (which will insert snippet)
+                  // Otherwise, handle Tab for our custom completions (function snippets, commas, closing parens)
+                  editor.addCommand(monaco.KeyCode.Tab, () => {
+                    const model = editor.getModel();
+                    if (!model) return;
+                    
+                    const position = editor.getPosition();
+                    if (!position || position.lineNumber < 2) {
+                      // Skip line 1, use default Tab behavior
+                      return;
+                    }
+                    
+                    // FIRST: Check if IntelliSense is showing
+                    // If so, let Monaco handle Tab to accept the suggestion (which will insert snippet with snippet mode)
+                    // Monaco's acceptSuggestionOnTab: 'on' will handle this automatically
+                    // But we need to check if suggestions are visible first
+                    const suggestController = editor.getContribution('suggestController');
+                    if (suggestController && suggestController.widget && suggestController.widget.value) {
+                      const widget = suggestController.widget.value;
+                      // Check if the suggest widget is open and visible
+                      if (widget && typeof widget.isOpen === 'function' && widget.isOpen()) {
+                        // IntelliSense is showing - let Monaco handle Tab to accept the suggestion
+                        // Don't intercept - return undefined so Monaco's default handler runs
+                        // Monaco will accept the suggestion which will insert the snippet with snippet mode
+                        return;
+                      }
+                    }
+                    
+                    // IntelliSense is NOT showing - handle Tab for our custom completions
+                    // Get current line
+                    const currentLine = model.getLineContent(position.lineNumber);
+                    const textBeforeCursor = currentLine.substring(0, position.column - 1);
+                    const textAfterCursor = currentLine.substring(position.column - 1);
+                    
+                    // Check if we're in a function call (case-insensitive)
+                    const functionCallPattern = /\b([A-Za-z]+\w*)\s*\([^)]*$/i;
+                    const functionMatch = textBeforeCursor.match(functionCallPattern);
+                    
+                    if (functionMatch) {
+                      const openParens = (textBeforeCursor.match(/\(/g) || []).length;
+                      const closeParens = (textBeforeCursor.match(/\)/g) || []).length;
+                      const hasUnclosedParens = openParens > closeParens;
+                      
+                      if (hasUnclosedParens) {
+                        // Patterns: after string literal, number, cell reference, expression, or closing parenthesis
+                        // Note: Single quotes are reserved by Excel for sheet names, so only check double quotes for strings
+                        const afterStringPattern = /"[^"]*"\s*$/;
+                        const afterNumberPattern = /(\d+(\.\d+)?)\s*$/;
+                        const afterCellRefPattern = /([A-Z]+\$?\d+\$?)\s*$/i;
+                        const afterExpressionPattern = /([A-Z]+\$?\d+\$?|\d+|"[^"]*")\s*[+\-*/=<>!]+\s*([A-Z]+\$?\d+\$?|\d+|"[^"]*")\s*$/i;
+                        const afterClosingParenPattern = /\)\s*$/;
+                        
+                        // Check if we need a comma (after a complete argument)
+                        const needsComma = afterStringPattern.test(textBeforeCursor) || 
+                                          afterNumberPattern.test(textBeforeCursor) || 
+                                          afterCellRefPattern.test(textBeforeCursor) ||
+                                          afterExpressionPattern.test(textBeforeCursor) ||
+                                          afterClosingParenPattern.test(textBeforeCursor);
+                        
+                        if (needsComma) {
+                          // Insert comma with space (no popup)
+                          editor.executeEdits('tab-comma', [{
+                            range: new monaco.Range(position.lineNumber, position.column, position.lineNumber, position.column),
+                            text: ', '
+                          }]);
+                          return;
+                        }
+                        
+                        // Check if we need a closing parenthesis
+                        const functionCallText = textBeforeCursor.substring(functionMatch.index);
+                        const argsMatch = functionCallText.match(/\((.+)$/);
+                        
+                        if (argsMatch) {
+                          const args = argsMatch[1];
+                          const argCount = (args.match(/,/g) || []).length + 1;
+                          const trimmedArgs = args.trim();
+                          
+                          // Check if we're at the end of a complete argument
+                          // Note: Single quotes are reserved by Excel for sheet names
+                          const endsWithCompleteArg = /([A-Z]+\$?\d+\$?|\d+|"[^"]*"|\))\s*[+\-*/=<>!]+\s*([A-Z]+\$?\d+\$?|\d+|"[^"]*")\s*$/i.test(trimmedArgs) ||
+                                                      /([A-Z]+\$?\d+\$?|\d+|"[^"]*"|\))\s*$/i.test(trimmedArgs);
+                          
+                          const hasClosingParen = textAfterCursor.trim().startsWith(')');
+                          
+                          // If we have at least one complete argument and no closing paren, insert it
+                          if (endsWithCompleteArg && argCount >= 1 && !hasClosingParen) {
+                            // Insert closing parenthesis (no popup)
+                            editor.executeEdits('tab-close-paren', [{
+                              range: new monaco.Range(position.lineNumber, position.column, position.lineNumber, position.column),
+                              text: ')'
+                            }]);
+                            return;
+                          }
+                        }
+                      }
+                    }
+                    
+                    // Default Tab behavior - complete function names or trigger suggestions
+                    // First, check if we're typing a function name that should be completed
+                    const word = model.getWordUntilPosition(position);
+                    const wordMatch = textBeforeCursor.match(/([A-Za-z_][A-Za-z0-9_]*)$/i);
+                    const actualWord = wordMatch ? wordMatch[1] : word.word;
+                    
+                    if (actualWord && actualWord.length >= 1) {
+                      const isCellReference = /^[A-Z]{1,3}\$?\d+\$?$/i.test(actualWord);
+                      if (!isCellReference) {
+                        // Check if this matches a function name exactly (case-insensitive)
+                        if (window.hyperFormulaFunctions && window.hyperFormulaFunctions.length > 0) {
+                          const wordUpper = actualWord.toUpperCase();
+                          const matchingFunction = window.hyperFormulaFunctions.find(func => 
+                            func.name.toUpperCase() === wordUpper
+                          );
+                          
+                          if (matchingFunction) {
+                            // Exact match found - insert the snippet directly using the snippet controller
+                            // This will properly activate snippet mode and show placeholders
+                            // The cursor will be positioned at the first placeholder (after opening paren)
+                            // Tab should then move to the next placeholder
+                            
+                            const wordStart = textBeforeCursor.length - actualWord.length;
+                            const correctRange = new monaco.Range(
+                              position.lineNumber,
+                              wordStart + 1,
+                              position.lineNumber,
+                              position.column
+                            );
+                            
+                            // Create snippet template from function signature
+                            // Example: IF(logical, value, value) -> IF(${1:logical}, ${2:value}, ${3:value})
+                            // Check if createFunctionSnippet is available
+                            if (!window.createFunctionSnippet) {
+                              console.error('createFunctionSnippet is not defined!');
+                              return;
+                            }
+                            
+                            const snippetTemplate = window.createFunctionSnippet(matchingFunction);
+                            
+                            if (!snippetTemplate) {
+                              console.error('Failed to create snippet template for function:', matchingFunction.name);
+                              return;
+                            }
+                            
+                            console.log('Tab: Inserting snippet for function', matchingFunction.name);
+                            console.log('Snippet template:', snippetTemplate);
+                            
+                            // Use Monaco's snippet controller to insert the snippet
+                            // This will properly activate snippet mode and show placeholders
+                            window.isProgrammaticCursorChange = true;
+                            
+                            // Select the function name to replace with snippet
+                            editor.setSelection(correctRange);
+                            
+                            // Insert the snippet using Monaco's SnippetController2
+                            // This will properly activate snippet mode and show placeholders
+                            // The cursor will be positioned at the first placeholder (${1:logical})
+                            try {
+                              // Use Monaco's SnippetController2 to insert the snippet
+                              // This will replace the selection with the snippet and activate snippet mode
+                              const snippetController = editor.getContribution('snippetController2');
+                              if (snippetController) {
+                                // Select the function name to replace
+                                editor.setSelection(correctRange);
+                                // Insert the snippet - this automatically activates snippet mode
+                                snippetController.insert(snippetTemplate);
+                                console.log('Snippet inserted via SnippetController2');
+                              } else {
+                                throw new Error('SnippetController2 not available');
+                              }
+                            } catch (e) {
+                              console.error('SnippetController2.insert failed:', e);
+                              
+                              // Fallback: Use executeEdits to insert the snippet
+                              // Note: This won't activate snippet mode, but will at least insert the text
+                              editor.executeEdits('tab-complete-function', [{
+                                range: correctRange,
+                                text: snippetTemplate
+                              }]);
+                              
+                              console.warn('Snippet inserted without snippet mode (fallback)');
+                            }
+                            
+                            Promise.resolve().then(() => {
+                              window.isProgrammaticCursorChange = false;
+                            });
+                            
+                            return;
+                          }
+                        }
+                        
+                        // No exact match - trigger suggestions so user can choose
+                        editor.trigger('keyboard', 'editor.action.triggerSuggest', {});
+                        return;
+                      }
+                    }
+                  });
+                  
+                  // Set up Ctrl+Enter command after editor is created
+                  editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, () => {
+                    const cell = window.selectedCell;
+                    if (cell && !editor.getOption(monaco.editor.EditorOption.readOnly)) {
+                      // Get all lines and skip line 1 (the "=" visual indicator line)
+                      const allLines = editor.getValue().split('\n');
+                      if (allLines.length < 2) {
+                        // No formula entered, just empty line 1
+                        return;
+                      }
+                      
+                      // Get formula starting from line 2, join and trim
+                      let formula = allLines.slice(1).join('\n').trim();
+                      
+                      // Add "=" prefix if missing (required for HyperFormula)
+                      if (formula && !formula.startsWith("=")) {
+                        formula = "=" + formula;
+                      }
+                      
+                      const cellRef = cell.getAttribute("data-ref");
+                      
+                      if (cellRef && window.hf) {
+                        // Use HyperFormula to set and calculate the cell value
+                        setCellValue(cellRef, formula);
+                      } else {
+                        // Fallback if HyperFormula not available or not initialized
+                        console.warn("HyperFormula not ready. hf:", !!window.hf, "hfSheetId:", window.hfSheetId);
+                        const display = cell.querySelector(".grid-cell-display");
+                        if (display) {
+                          display.textContent = formula;
+                        }
+                      }
+                      
+                      // Exit edit mode after saving (remove pattern background)
+                      isEditMode = false;
+                      if (cell) {
+                        cell.classList.remove("edit-mode");
+                      }
+                    }
+                  });
+                  window.monacoEditor = editor;
+                  console.log("Monaco Editor created successfully", editor);
+                } catch (monacoError) {
+                  console.error("Failed to initialize Monaco Editor:", monacoError);
+                }
+              }).catch(monacoError => {
+                console.error("Failed to load Monaco Editor:", monacoError);
+                console.error("Error details:", monacoError.stack);
+                // Continue without Monaco - grid should still work
+              });
+            }, 100);
+          }
+
+          let selectedCells = new Set();
+          let isSelecting = false;
+          let selectionStart = null;
+          let isEditMode = false;
+          window.selectedCell = null;
+          
+          // Helper function to ensure editor value has 7 lines with empty first line
+          function ensureSevenLines(value) {
+            const lines = value.split('\n');
+            // Ensure first line is empty (for the "=" visual indicator)
+            if (lines.length === 0) {
+              lines[0] = "";
+            } else {
+              lines[0] = ""; // Always keep first line empty
+            }
+            // Ensure we have 7 lines total
+            while (lines.length < 7) {
+              lines.push('');
+            }
+            return lines.slice(0, 7).join('\n');
+          }
+          
+          // Function to enter edit mode for a cell
+          function enterEditMode(cell) {
+            if (!cell) return;
+            
+            // Don't enter edit mode for headers
+            const isHeader = cell.tagName === "TH" || cell === cell.parentElement.querySelector("td:first-child");
+            if (isHeader) return;
+            
+            // Set edit mode flag first
+            isEditMode = true;
+            
+            // Select the cell visually (but don't rely on selectCell for editor setup)
+            clearSelection();
+            selectedCells.add(cell);
+            cell.classList.add("selected");
+            cell.classList.add("edit-mode"); // Add edit-mode class for pattern background
+            cell.setAttribute("data-selection-edge", "top bottom left right");
+            window.selectedCell = cell;
+            updateCellRangePill();
+            
+            // Get cell reference and formula
+            const cellRef = cell.getAttribute("data-ref");
+            const storedFormula = cell.getAttribute("data-formula") || "";
+            
+            // Strip "=" prefix when displaying in editor
+            let editorValue = "";
+            if (storedFormula && storedFormula.startsWith("=")) {
+              editorValue = storedFormula.substring(1);
+            } else if (storedFormula) {
+              editorValue = storedFormula;
+            } else {
+              // If no stored formula, try to get it from HyperFormula
+              if (cellRef && window.hf) {
+                const address = cellRefToAddress(cellRef);
+                if (address) {
+                  const [row, col] = address;
+                  const sheetId = 0;
+                  try {
+                    const cellFormula = window.hf.getCellFormula({ col, row, sheet: sheetId });
+                    if (cellFormula && cellFormula.startsWith("=")) {
+                      editorValue = cellFormula.substring(1);
+                    } else if (cellFormula) {
+                      editorValue = cellFormula;
+                    }
+                  } catch (e) {
+                    editorValue = "";
+                  }
+                }
+              }
+            }
+            
+            // Set up the editor directly
+            const currentEditor = window.monacoEditor || editor;
+            if (currentEditor && typeof currentEditor.setValue === 'function') {
+              // First line is empty (visual indicator), formula starts on line 2
+              const fullValue = ensureSevenLines("\n" + (editorValue || ""));
+              
+              // Calculate target cursor position
+              const line2Content = (editorValue || "").split('\n')[0] || "";
+              const targetColumn = Math.max(1, line2Content.length + 1);
+              
+              // Set programmatic flag BEFORE setValue to prevent event listener from interfering
+              window.isProgrammaticCursorChange = true;
+              
+              // Set value directly
+              currentEditor.setValue(fullValue);
+              
+              // Make editor editable BEFORE setting cursor position
+              currentEditor.updateOptions({ readOnly: false });
+              
+              // Set cursor position immediately
+              currentEditor.setPosition({ lineNumber: 2, column: targetColumn });
+              
+              // Focus the editor immediately - this is critical for edit mode
+              currentEditor.focus();
+              
+              // Reset flag after operations complete
+              Promise.resolve().then(() => {
+                window.isProgrammaticCursorChange = false;
+              });
+              
+              // Also ensure focus after a brief delay to handle any async operations
+              setTimeout(() => {
+                if (currentEditor && typeof currentEditor.focus === 'function') {
+                  currentEditor.focus();
+                  // Ensure cursor is still on line 2
+                  const model = currentEditor.getModel();
+                  if (model) {
+                    const line2Content = model.getLineContent(2);
+                    const col = Math.max(1, line2Content.length + 1);
+                    currentEditor.setPosition({ lineNumber: 2, column: col });
+                  }
+                }
+              }, 50);
+            }
+          }
+          
+          // Function to convert column number to letter (0 -> A, 1 -> B, etc.)
+          function colToLetter(col) {
+            let letter = "";
+            let num = col;
+            do {
+              letter = String.fromCharCode(65 + (num % 26)) + letter;
+              num = Math.floor(num / 26) - 1;
+            } while (num >= 0);
+            return letter;
+          }
+          
+          // Function to convert column letter to number (A -> 0, B -> 1, etc.)
+          function letterToCol(letter) {
+            let col = 0;
+            for (let i = 0; i < letter.length; i++) {
+              col = col * 26 + (letter.charCodeAt(i) - 64);
+            }
+            return col - 1;
+          }
+          
+          // Function to convert cell reference (A1) to HyperFormula address [row, col]
+          function cellRefToAddress(cellRef) {
+            const match = cellRef.match(/^([A-Z]+)(\d+)$/i);
+            if (!match) return null;
+            const col = letterToCol(match[1].toUpperCase());
+            const row = parseInt(match[2]) - 1; // HyperFormula uses 0-based indexing
+            return [row, col];
+          }
+          
+          // Function to convert HyperFormula address [row, col] to cell reference (A1)
+          function addressToCellRef(row, col) {
+            return colToLetter(col) + (row + 1);
+          }
+          
+          // Function to update a cell's display from HyperFormula
+          function updateCellDisplay(cellRef) {
+            if (!window.hf) return;
+            
+            const address = cellRefToAddress(cellRef);
+            if (!address) return;
+            
+            const [row, col] = address;
+            const sheetId = 0;
+            
+            try {
+              // Get the calculated value from HyperFormula
+              const cellValue = window.hf.getCellValue({ col, row, sheet: sheetId });
+              
+              // Update the display in the grid
+              const cell = gridBody.querySelector(`td[data-ref="${cellRef}"]`);
+              if (cell) {
+                const display = cell.querySelector(".grid-cell-display");
+                if (display) {
+                  // Show the calculated result (without "=" prefix)
+                  display.textContent = cellValue !== null && cellValue !== undefined ? cellValue.toString() : "";
+                }
+              }
+            } catch (error) {
+              console.error(`Error updating cell display for ${cellRef}:`, error);
+            }
+          }
+          
+          // Function to get all dependent cells for a given cell address
+          function getDependentCells(row, col, sheetId) {
+            if (!window.hf) return [];
+            
+            const dependentCells = [];
+            
+            try {
+              // Iterate through all cells that are rendered in the grid
+              // This is more efficient than checking all possible cells
+              const changedCellRef = addressToCellRef(row, col);
+              
+              // Find all cells in the grid that have formulas
+              const allCells = gridBody.querySelectorAll('td[data-ref]');
+              
+              allCells.forEach(cellElement => {
+                const cellRef = cellElement.getAttribute("data-ref");
+                if (!cellRef) return;
+                
+                // Check if this cell has a stored formula
+                const storedFormula = cellElement.getAttribute("data-formula");
+                if (storedFormula && storedFormula.startsWith("=")) {
+                  // Check if the formula references the changed cell
+                  // Build a regex that matches the cell reference (handling $ for absolute references)
+                  // Match both A1 and $A$1, $A1, A$1 variants
+                  const baseRef = changedCellRef; // e.g., "A1"
+                  const colLetter = baseRef.match(/^([A-Z]+)/i)?.[1] || "";
+                  const rowNum = baseRef.match(/(\d+)$/)?.[1] || "";
+                  
+                  // Create regex pattern that matches cell reference in all its forms: A1, $A$1, $A1, A$1
+                  // Escape the column letter for regex
+                  const escapedColLetter = colLetter.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                  const pattern = new RegExp(`\\$?${escapedColLetter}\\$?${rowNum}\\b`, 'i');
+                  
+                  // Check if pattern matches
+                  const referencesChangedCell = pattern.test(storedFormula);
+                  
+                  if (referencesChangedCell) {
+                    const depAddress = cellRefToAddress(cellRef);
+                    if (depAddress) {
+                      const [depRow, depCol] = depAddress;
+                      dependentCells.push({ row: depRow, col: depCol, ref: cellRef });
+                    }
+                  }
+                } else {
+                  // If no stored formula, try to get it from HyperFormula
+                  const depAddress = cellRefToAddress(cellRef);
+                  if (depAddress) {
+                    const [depRow, depCol] = depAddress;
+                    try {
+                      const cellFormula = window.hf.getCellFormula({ col: depCol, row: depRow, sheet: sheetId });
+                      if (cellFormula && cellFormula.startsWith("=")) {
+                        const baseRef = changedCellRef;
+                        const colLetter = baseRef.match(/^([A-Z]+)/i)?.[1] || "";
+                        const rowNum = baseRef.match(/(\d+)$/)?.[1] || "";
+                        const pattern = new RegExp(`\\b\\$?${colLetter}\\$?${rowNum}\\b`, 'i');
+                        
+                        if (pattern.test(cellFormula)) {
+                          dependentCells.push({ row: depRow, col: depCol, ref: cellRef });
+                        }
+                      }
+                    } catch (e) {
+                      // Cell might not exist, skip it
+                    }
+                  }
+                }
+              });
+            } catch (error) {
+              console.error("Error getting dependent cells:", error);
+            }
+            
+            return dependentCells;
+          }
+          
+          // Function to set cell value in HyperFormula and update display
+          function setCellValue(cellRef, value) {
+            if (!window.hf) {
+              console.warn("HyperFormula not initialized");
+              return;
+            }
+            
+            const address = cellRefToAddress(cellRef);
+            if (!address) {
+              console.warn("Invalid cell reference:", cellRef);
+              return;
+            }
+            
+            const [row, col] = address;
+            
+            try {
+              // First sheet is always at index 0
+              const sheetId = 0;
+              
+              // Use value as-is if it already has "=" or is empty
+              // The Ctrl+Enter handler should have already added "=" if needed
+              let formulaToStore = value;
+              
+              // Set the value in HyperFormula - address object uses col, row, sheet order
+              window.hf.setCellContents({ col, row, sheet: sheetId }, [[formulaToStore]]);
+              
+              // Recalculate to execute formulas - HyperFormula automatically recalculates dependencies
+              window.hf.rebuildAndRecalculate();
+              
+              // Update the changed cell's display
+              updateCellDisplay(cellRef);
+              
+              // Store the formula text (with "=" prefix) in data attribute for later retrieval
+              const cell = gridBody.querySelector(`td[data-ref="${cellRef}"]`);
+              if (cell) {
+                cell.setAttribute("data-formula", formulaToStore);
+              }
+              
+              // Find and update all dependent cells
+              const dependentCells = getDependentCells(row, col, sheetId);
+              
+              // Update displays of all dependent cells
+              dependentCells.forEach(depCell => {
+                updateCellDisplay(depCell.ref);
+                
+                // Also update the formula stored in data attribute if it exists
+                const depCellElement = gridBody.querySelector(`td[data-ref="${depCell.ref}"]`);
+                if (depCellElement) {
+                  try {
+                    const depCellFormula = window.hf.getCellFormula({ col: depCell.col, row: depCell.row, sheet: sheetId });
+                    if (depCellFormula) {
+                      depCellElement.setAttribute("data-formula", depCellFormula);
+                    }
+                  } catch (e) {
+                    // Formula might not exist, skip
+                  }
+                }
+              });
+              
+            } catch (error) {
+              console.error("Error setting cell value:", error);
+            }
+          }
+          
+          // Function to get cell value from HyperFormula
+          function getCellValue(cellRef) {
+            if (!window.hf) {
+              return null;
+            }
+            
+            const address = cellRefToAddress(cellRef);
+            if (!address) {
+              return null;
+            }
+            
+            const [row, col] = address;
+            try {
+              // First sheet is always at index 0
+              const sheetId = 0;
+              
+              const cellValue = window.hf.getCellValue({ col, row, sheet: sheetId });
+              return cellValue;
+            } catch (error) {
+              console.error("Error getting cell value:", error);
+              return null;
+            }
+          }
+
+          // Function to get cell reference from row and col (0-indexed)
+          function getCellReference(row, col) {
+            return colToLetter(col) + (row + 1);
+          }
+
+          // Function to update the cell range pill
+          function updateCellRangePill() {
+            const pill = document.getElementById("cellRangePill");
+            if (!pill) return;
+
+            if (selectedCells.size === 0) {
+              pill.textContent = "";
+              return;
+            }
+
+            const cellsArray = Array.from(selectedCells);
+            const rows = cellsArray.map(cell => parseInt(cell.getAttribute("data-row"))).filter(r => !isNaN(r));
+            const cols = cellsArray.map(cell => parseInt(cell.getAttribute("data-col"))).filter(c => !isNaN(c));
+
+            if (rows.length === 0 || cols.length === 0) {
+              pill.textContent = "";
+              return;
+            }
+
+            const minRow = Math.min(...rows);
+            const maxRow = Math.max(...rows);
+            const minCol = Math.min(...cols);
+            const maxCol = Math.max(...cols);
+
+            if (minRow === maxRow && minCol === maxCol) {
+              // Single cell
+              pill.textContent = getCellReference(minRow, minCol);
+            } else {
+              // Range
+              pill.textContent = `${getCellReference(minRow, minCol)}:${getCellReference(maxRow, maxCol)}`;
+            }
+          }
+
+          // Function to clear all selections (without updating pill)
+          function clearSelection() {
+            selectedCells.forEach(cell => {
+              cell.classList.remove("selected");
+              cell.classList.remove("edit-mode"); // Remove edit-mode class when clearing selection
+              cell.removeAttribute("data-selection-edge");
+            });
+            selectedCells.clear();
+            
+            // Hide selection overlay and fill handle
+            const overlay = document.getElementById("selectionOverlay");
+            if (overlay) {
+              overlay.style.display = "none";
+            }
+            const fillHandle = document.getElementById("fillHandle");
+            if (fillHandle) {
+              fillHandle.style.display = "none";
+            }
+          }
+          
+          // Function to update the selection overlay rectangle
+          function updateSelectionOverlay() {
+            const overlay = document.getElementById("selectionOverlay");
+            if (!overlay || selectedCells.size === 0) {
+              if (overlay) overlay.style.display = "none";
+              return;
+            }
+            
+            // Get all selected cells
+            const cells = Array.from(selectedCells);
+            if (cells.length === 0) {
+              overlay.style.display = "none";
+              return;
+            }
+            
+            // Get the grid wrapper inner (scrollable container)
+            const gridWrapperInner = document.getElementById("gridWrapperInner");
+            if (!gridWrapperInner) return;
+            
+            // Get bounding rectangles
+            const gridRect = gridWrapperInner.getBoundingClientRect();
+            
+            // Find the min/max positions of all selected cells
+            let minLeft = Infinity;
+            let minTop = Infinity;
+            let maxRight = -Infinity;
+            let maxBottom = -Infinity;
+            
+            cells.forEach(cell => {
+              const cellRect = cell.getBoundingClientRect();
+              const relativeLeft = cellRect.left - gridRect.left + gridWrapperInner.scrollLeft;
+              const relativeTop = cellRect.top - gridRect.top + gridWrapperInner.scrollTop;
+              
+              minLeft = Math.min(minLeft, relativeLeft);
+              minTop = Math.min(minTop, relativeTop);
+              maxRight = Math.max(maxRight, relativeLeft + cellRect.width);
+              maxBottom = Math.max(maxBottom, relativeTop + cellRect.height);
+            });
+            
+            // Position and size the overlay
+            overlay.style.left = `${minLeft}px`;
+            overlay.style.top = `${minTop}px`;
+            overlay.style.width = `${maxRight - minLeft}px`;
+            overlay.style.height = `${maxBottom - minTop}px`;
+            overlay.style.display = "block";
+            
+            // Show fill handle
+            const fillHandle = document.getElementById("fillHandle");
+            if (fillHandle) {
+              fillHandle.style.display = "block";
+            }
+          }
+          
+          // Function to select a range of cells
+          function selectRange(startCell, endCell) {
+            clearSelection();
+            
+            if (!startCell || !endCell) return;
+            
+            const startRow = parseInt(startCell.getAttribute("data-row"));
+            const startCol = parseInt(startCell.getAttribute("data-col"));
+            const endRow = parseInt(endCell.getAttribute("data-row"));
+            const endCol = parseInt(endCell.getAttribute("data-col"));
+            
+            const minRow = Math.min(startRow, endRow);
+            const maxRow = Math.max(startRow, endRow);
+            const minCol = Math.min(startCol, endCol);
+            const maxCol = Math.max(startCol, endCol);
+            
+            // Select all cells in the range (skip headers)
+            for (let r = minRow; r <= maxRow; r++) {
+              for (let c = minCol; c <= maxCol; c++) {
+                const cell = gridBody.querySelector(`tr[data-row="${r}"] td[data-col="${c}"]`);
+                if (cell) {
+                  // Skip row headers (first column)
+                  const isRowHeader = cell === cell.parentElement.querySelector("td:first-child");
+                  if (!isRowHeader) {
+                    cell.classList.add("selected");
+                    selectedCells.add(cell);
+                    
+                    // Mark edge cells for border styling
+                    const edges = [];
+                    if (r === minRow) edges.push("top");
+                    if (r === maxRow) edges.push("bottom");
+                    if (c === minCol) edges.push("left");
+                    if (c === maxCol) edges.push("right");
+                    
+                    if (edges.length > 0) {
+                      cell.setAttribute("data-selection-edge", edges.join(" "));
+                    } else {
+                      cell.removeAttribute("data-selection-edge");
+                    }
+                  }
+                }
+              }
+            }
+            
+            // Update selection overlay
+            updateSelectionOverlay();
+            
+            // Update formula editor with first cell's value
+            const firstCell = gridBody.querySelector(`tr[data-row="${minRow}"] td[data-col="${minCol}"]`);
+            if (firstCell) {
+              const isHeader = firstCell.tagName === "TH" || firstCell === firstCell.parentElement.querySelector("td:first-child");
+              if (!isHeader) {
+                // Get the stored formula from data attribute (with "=" prefix)
+                const storedFormula = firstCell.getAttribute("data-formula") || "";
+                
+                // Strip "=" prefix when displaying in editor
+                let editorValue = "";
+                if (storedFormula && storedFormula.startsWith("=")) {
+                  editorValue = storedFormula.substring(1);
+                } else if (storedFormula) {
+                  editorValue = storedFormula;
+                }
+                
+                const currentEditor = window.monacoEditor || editor;
+                if (currentEditor) {
+                  // First line is empty (visual indicator), formula starts on line 2
+                  const fullValue = "\n" + (editorValue || "");
+                  
+                  // Calculate target cursor position before setting value
+                  const line2Content = (editorValue || "").split('\n')[0] || "";
+                  const targetColumn = Math.max(1, line2Content.length + 1);
+                  
+                  // Set programmatic flag BEFORE setValue to prevent event listener from interfering
+                  window.isProgrammaticCursorChange = true;
+                  
+                  // Set value
+                  currentEditor.setValue(ensureSevenLines(fullValue));
+                  
+                  // Set cursor to line 2 immediately and synchronously
+                  currentEditor.setPosition({ lineNumber: 2, column: targetColumn });
+                  
+                  // Reset flag after a microtask to allow normal cursor behavior
+                  Promise.resolve().then(() => {
+                    window.isProgrammaticCursorChange = false;
+                  });
+                  
+                  currentEditor.updateOptions({ readOnly: false });
+                }
+              } else {
+                const currentEditor = window.monacoEditor || editor;
+                if (currentEditor) {
+                  currentEditor.updateOptions({ readOnly: true });
+                }
+              }
+              window.selectedCell = firstCell;
+            }
+            updateCellRangePill();
+          }
+          
+          // Function to select a single cell programmatically (selection mode)
+          function selectCell(cell) {
+            if (!cell) return;
+            clearSelection();
+            selectedCells.add(cell);
+            cell.classList.add("selected");
+            // Only add edit-mode class if actually in edit mode
+            if (isEditMode) {
+              cell.classList.add("edit-mode");
+            }
+            // Single cell selection - all edges should have borders
+            cell.setAttribute("data-selection-edge", "top bottom left right");
+            window.selectedCell = cell;
+            
+            // Update selection overlay
+            updateSelectionOverlay();
+            
+            // Log cell information
+            const cellRef = cell.getAttribute("data-ref");
+            const sheetName = "Sheet1";
+            const sheetId = window.hfSheetId !== undefined ? window.hfSheetId : 0;
+            console.log(`Cell clicked - Sheet: ${sheetName}, Cell: ${cellRef || 'N/A'}, Sheet ID: ${sheetId}`);
+            
+            // Only update formula editor for data cells (not headers)
+            const isHeader = cell.tagName === "TH" || cell === cell.parentElement.querySelector("td:first-child");
+            if (!isHeader) {
+              // Get the stored formula from data attribute (with "=" prefix)
+              let storedFormula = cell.getAttribute("data-formula");
+              
+              // Strip "=" prefix when displaying in editor
+              let editorValue = "";
+              
+              // If we have a stored formula, use it
+              if (storedFormula) {
+                if (storedFormula.startsWith("=")) {
+                  editorValue = storedFormula.substring(1);
+                } else {
+                  editorValue = storedFormula;
+                }
+              } else {
+                // If no stored formula in data attribute, check HyperFormula
+                const cellRef = cell.getAttribute("data-ref");
+                if (cellRef && window.hf) {
+                  const address = cellRefToAddress(cellRef);
+                  if (address) {
+                    const [row, col] = address;
+                    const sheetId = 0;
+                    // First, try to get the formula (this will throw if cell has no formula)
+                    let hasFormula = false;
+                    try {
+                      const cellFormula = window.hf.getCellFormula({ col, row, sheet: sheetId });
+                      if (cellFormula) {
+                        // Cell has a formula
+                        hasFormula = true;
+                        // HyperFormula returns formula with "=" prefix
+                        if (cellFormula.startsWith("=")) {
+                          editorValue = cellFormula.substring(1);
+                        } else {
+                          editorValue = cellFormula;
+                        }
+                        // Store the formula (with "=" prefix) in data attribute for future reference
+                        const formulaToStore = cellFormula.startsWith("=") ? cellFormula : "=" + cellFormula;
+                        cell.setAttribute("data-formula", formulaToStore);
+                      }
+                    } catch (formulaError) {
+                      // getCellFormula throws an error if cell doesn't have a formula
+                      // This is expected for cells with values, not an actual error
+                      hasFormula = false;
+                    }
+                    
+                    // If cell doesn't have a formula, try to get the value
+                    if (!hasFormula) {
+                      try {
+                        const cellValue = window.hf.getCellValue({ col, row, sheet: sheetId });
+                        if (cellValue !== null && cellValue !== undefined && cellValue !== "") {
+                          // Cell has a value (not a formula)
+                          editorValue = cellValue.toString();
+                          // Store the value (without "=" prefix) in data attribute
+                          // This distinguishes it from formulas which have "=" prefix
+                          cell.setAttribute("data-formula", cellValue.toString());
+                        } else {
+                          // Cell is empty
+                          editorValue = "";
+                          // Clear data-formula attribute for empty cells
+                          cell.removeAttribute("data-formula");
+                        }
+                      } catch (valueError) {
+                        // If getCellValue also fails, cell is empty
+                        editorValue = "";
+                        cell.removeAttribute("data-formula");
+                      }
+                    }
+                  }
+                }
+              }
+              
+              const currentEditor = window.monacoEditor || editor;
+              if (currentEditor && typeof currentEditor.setValue === 'function') {
+                // First line is empty (visual indicator), formula starts on line 2
+                const fullValue = ensureSevenLines("\n" + (editorValue || ""));
+                
+                // Calculate target cursor position
+                const line2Content = (editorValue || "").split('\n')[0] || "";
+                const targetColumn = Math.max(1, line2Content.length + 1);
+                
+                // Set programmatic flag BEFORE setValue to prevent event listener from interfering
+                window.isProgrammaticCursorChange = true;
+                
+                // Get model for atomic operation
+                const model = currentEditor.getModel();
+                
+                if (model) {
+                  // Use executeEdits to atomically set value and cursor position
+                  // This prevents the visible jump from line 1 to line 2
+                  currentEditor.executeEdits('setCellValue', [
+                    {
+                      range: model.getFullModelRange(),
+                      text: fullValue
+                    }
+                  ], [
+                    {
+                      range: new monaco.Range(2, targetColumn, 2, targetColumn),
+                      selection: new monaco.Range(2, targetColumn, 2, targetColumn)
+                    }
+                  ]);
+                } else {
+                  // Fallback: set value and cursor separately
+                  currentEditor.setValue(fullValue);
+                  currentEditor.setPosition({ lineNumber: 2, column: targetColumn });
+                }
+                
+                // Reset flag after operations complete
+                Promise.resolve().then(() => {
+                  window.isProgrammaticCursorChange = false;
+                });
+                
+                currentEditor.updateOptions({ readOnly: false });
+                
+                // Don't auto-focus in selection mode - only in edit mode
+                // Monaco Editor doesn't have blur(), so we just don't focus
+                if (isEditMode && typeof currentEditor.focus === 'function') {
+                  currentEditor.focus();
+                }
+              }
+            } else {
+              const currentEditor = window.monacoEditor || editor;
+              if (currentEditor) {
+                currentEditor.updateOptions({ readOnly: true });
+              }
+            }
+            updateCellRangePill();
+          }
+          
+          // Disable editor initially (no cell selected) - will be set when Monaco loads
+          // Ctrl+Enter command is set up in the Monaco initialization above
+          
+          // Handle mouseup to end selection
+          document.addEventListener("mouseup", () => {
+            if (isSelecting) {
+              isSelecting = false;
+              selectionStart = null;
+              document.body.style.userSelect = "";
+            }
+          });
+          
+          // Exit edit mode when clicking outside or pressing Escape
+          document.addEventListener("keydown", (e) => {
+            if (e.key === "Escape" && isEditMode) {
+              isEditMode = false;
+              // Remove edit-mode class from selected cell when exiting edit mode
+              if (window.selectedCell) {
+                window.selectedCell.classList.remove("edit-mode");
+              }
+              // Monaco Editor doesn't have blur(), just exit edit mode
+              // The editor will remain but won't be focused
+            }
+          });
+          
+          // Exit edit mode when clicking on a different cell (single click)
+          // This is handled in the click handler by setting isEditMode = false
+
+
+          function buildGrid(rows = 150, columns = 50) {
+            console.log("buildGrid function called with rows:", rows, "columns:", columns);
+            const gridHeader = document.getElementById("gridHeader");
+            if (!gridHeader) {
+              console.error("gridHeader not found!");
+              return;
+            }
+            const headerRow = gridHeader.querySelector("tr");
+            if (!headerRow) {
+              console.error("headerRow not found!");
+              return;
+            }
+            
+            // Generate column headers
+            const headers = Array.from({ length: columns }, (_, i) => {
+              let col = "";
+              let num = i;
+              do {
+                col = String.fromCharCode(65 + (num % 26)) + col;
+                num = Math.floor(num / 26) - 1;
+              } while (num >= 0);
+              return col;
+            });
+
+            // Add header cells with resizing
+            // Use a shared resizing state outside the loop
+            if (!window.gridColumnResizing) {
+              window.gridColumnResizing = {
+                current: null,
+                handleMouseMove: null,
+                handleMouseUp: null
+              };
+            }
+            
+            headers.forEach((header, index) => {
+              const th = document.createElement("th");
+              th.scope = "col";
+              th.textContent = header;
+              th.style.width = "80px";
+              th.setAttribute("data-col-index", index);
+              
+              // Add column resizing with better detection
+              const handleColResize = (e) => {
+                const rect = th.getBoundingClientRect();
+                const rightEdge = rect.right;
+                // Check if click is within 10px of right edge
+                if (e.clientX >= rightEdge - 10) {
+                  window.gridColumnResizing.current = {
+                    th: th,
+                    colIndex: index,
+                    startX: e.clientX,
+                    startWidth: th.offsetWidth
+                  };
+                  document.body.style.cursor = "col-resize";
+                  document.body.style.userSelect = "none";
+                  e.preventDefault();
+                  e.stopPropagation();
+                  e.stopImmediatePropagation();
+                  return true;
+                }
+                return false;
+              };
+              
+              // Use capture phase to ensure this runs first
+              th.addEventListener("mousedown", handleColResize, true);
+              
+              // Allow column headers to be selected (but not visually highlighted)
+              th.addEventListener("click", (e) => {
+                // Only select if not resizing
+                if (!window.gridColumnResizing.current) {
+                  selectCell(th);
+                }
+              });
+              
+              // Add cursor feedback for column headers
+              th.addEventListener("mousemove", (e) => {
+                const rect = th.getBoundingClientRect();
+                const rightEdge = rect.right;
+                if (e.clientX >= rightEdge - 10) {
+                  th.style.cursor = "col-resize";
+                } else {
+                  th.style.cursor = "default";
+                }
+              });
+              
+              headerRow.appendChild(th);
+            });
+            
+            // Set up global mouse handlers only once
+            if (!window.gridColumnResizing.handleMouseMove) {
+              window.gridColumnResizing.rafId = null;
+              window.gridColumnResizing.handleMouseMove = (e) => {
+                if (window.gridColumnResizing.current) {
+                  // Cancel any pending animation frame
+                  if (window.gridColumnResizing.rafId) {
+                    cancelAnimationFrame(window.gridColumnResizing.rafId);
+                  }
+                  
+                  // Batch updates in requestAnimationFrame
+                  window.gridColumnResizing.rafId = requestAnimationFrame(() => {
+                    const resizing = window.gridColumnResizing.current;
+                    if (!resizing) return;
+                    
+                    const newWidth = resizing.startWidth + (e.clientX - resizing.startX);
+                    if (newWidth >= 40) {
+                      // Update header
+                      resizing.th.style.width = `${newWidth}px`;
+                      resizing.th.style.minWidth = `${newWidth}px`;
+                      
+                      // Update all cells in this column - batch DOM updates
+                      const allCells = gridBody.querySelectorAll(`td[data-col="${resizing.colIndex}"]`);
+                      const widthStr = `${newWidth}px`;
+                      for (let i = 0; i < allCells.length; i++) {
+                        allCells[i].style.width = widthStr;
+                        allCells[i].style.minWidth = widthStr;
+                      }
+                    }
+                    window.gridColumnResizing.rafId = null;
+                  });
+                }
+              };
+              
+              window.gridColumnResizing.handleMouseUp = () => {
+                if (window.gridColumnResizing.current) {
+                  // Cancel any pending animation frame
+                  if (window.gridColumnResizing.rafId) {
+                    cancelAnimationFrame(window.gridColumnResizing.rafId);
+                    window.gridColumnResizing.rafId = null;
+                  }
+                  window.gridColumnResizing.current = null;
+                  document.body.style.cursor = "";
+                  document.body.style.userSelect = "";
+                }
+              };
+              
+              document.addEventListener("mousemove", window.gridColumnResizing.handleMouseMove);
+              document.addEventListener("mouseup", window.gridColumnResizing.handleMouseUp);
+            }
+
+            // Initialize row resizing state
+            if (!window.gridRowResizing) {
+              window.gridRowResizing = {
+                current: null,
+                handleMouseMove: null,
+                handleMouseUp: null
+              };
+            }
+
+            // Set up row resizing handlers only once
+            if (!window.gridRowResizing.handleMouseMove) {
+              window.gridRowResizing.rafId = null;
+              window.gridRowResizing.handleMouseMove = (e) => {
+                if (window.gridRowResizing.current) {
+                  // Cancel any pending animation frame
+                  if (window.gridRowResizing.rafId) {
+                    cancelAnimationFrame(window.gridRowResizing.rafId);
+                  }
+                  
+                  // Batch updates in requestAnimationFrame
+                  window.gridRowResizing.rafId = requestAnimationFrame(() => {
+                    const resizing = window.gridRowResizing.current;
+                    if (!resizing) return;
+                    
+                    const newHeight = resizing.startHeight + (e.clientY - resizing.startY);
+                    if (newHeight >= 15) {
+                      // Update row
+                      resizing.row.style.height = `${newHeight}px`;
+                      resizing.row.style.minHeight = `${newHeight}px`;
+                      
+                      // Update all cells in this row - batch DOM updates
+                      const allCells = resizing.row.querySelectorAll("td");
+                      const heightStr = `${newHeight}px`;
+                      for (let i = 0; i < allCells.length; i++) {
+                        allCells[i].style.height = heightStr;
+                        allCells[i].style.minHeight = heightStr;
+                      }
+                    }
+                    window.gridRowResizing.rafId = null;
+                  });
+                }
+              };
+              
+              window.gridRowResizing.handleMouseUp = () => {
+                if (window.gridRowResizing.current) {
+                  // Cancel any pending animation frame
+                  if (window.gridRowResizing.rafId) {
+                    cancelAnimationFrame(window.gridRowResizing.rafId);
+                    window.gridRowResizing.rafId = null;
+                  }
+                  window.gridRowResizing.current = null;
+                  document.body.style.cursor = "";
+                  document.body.style.userSelect = "";
+                }
+              };
+              
+              document.addEventListener("mousemove", window.gridRowResizing.handleMouseMove);
+              document.addEventListener("mouseup", window.gridRowResizing.handleMouseUp);
+            }
+
+            const fragment = document.createDocumentFragment();
+
+            for (let r = 0; r < rows; r += 1) {
+              const rowElement = document.createElement("tr");
+              rowElement.setAttribute("data-row", r);
+              rowElement.style.height = "20px";
+
+              const indexCell = document.createElement("td");
+              indexCell.textContent = r + 1;
+              indexCell.setAttribute("data-row-index", r);
+              indexCell.style.pointerEvents = "auto";
+              
+              // Add row resizing - handle both direct clicks and ::after pseudo-element
+              const handleRowResize = (e) => {
+                const rect = indexCell.getBoundingClientRect();
+                const bottomEdge = rect.bottom;
+                // Check if click is within 10px of bottom edge
+                if (e.clientY >= bottomEdge - 10) {
+                  window.gridRowResizing.current = {
+                    row: rowElement,
+                    rowIndex: r,
+                    startY: e.clientY,
+                    startHeight: rowElement.offsetHeight
+                  };
+                  document.body.style.cursor = "row-resize";
+                  document.body.style.userSelect = "none";
+                  e.preventDefault();
+                  e.stopPropagation();
+                  e.stopImmediatePropagation();
+                }
+              };
+              
+              // Use capture phase to ensure this runs first
+              indexCell.addEventListener("mousedown", handleRowResize, true);
+              
+              // Also handle mousemove to show cursor
+              indexCell.addEventListener("mousemove", (e) => {
+                const rect = indexCell.getBoundingClientRect();
+                const bottomEdge = rect.bottom;
+                if (e.clientY >= bottomEdge - 10) {
+                  indexCell.style.cursor = "row-resize";
+                } else {
+                  indexCell.style.cursor = "default";
+                }
+              });
+              
+              // Allow row headers to be selected (but not visually highlighted)
+              indexCell.addEventListener("click", () => {
+                selectCell(indexCell);
+              });
+              
+              rowElement.appendChild(indexCell);
+
+              for (let c = 0; c < columns; c += 1) {
+                const cell = document.createElement("td");
+                cell.setAttribute("data-row", r);
+                cell.setAttribute("data-col", c);
+                cell.setAttribute("data-ref", `${headers[c]}${r + 1}`);
+                cell.style.width = "80px"; // Set initial width
+                cell.style.height = "20px"; // Set initial height
+                
+                const display = document.createElement("span");
+                display.className = "grid-cell-display";
+                display.textContent = "";
+                
+                cell.appendChild(display);
+                
+                // Handle drag selection
+                cell.addEventListener("mousedown", (e) => {
+                  // Don't start selection if resizing
+                  if (window.gridColumnResizing.current || window.gridRowResizing.current) {
+                    return;
+                  }
+                  
+                  // Don't prevent default on double click
+                  if (e.detail === 2) {
+                    return;
+                  }
+                  
+                  isSelecting = true;
+                  selectionStart = cell;
+                  selectCell(cell);
+                  document.body.style.userSelect = "none";
+                  e.preventDefault();
+                });
+                
+                cell.addEventListener("mouseenter", (e) => {
+                  if (isSelecting && selectionStart) {
+                    selectRange(selectionStart, cell);
+                  }
+                });
+                
+                // Single click handler (when not dragging) - selection mode
+                let clickTimeout;
+                let clickCount = 0;
+                cell.addEventListener("click", (e) => {
+                  clickCount++;
+                  clearTimeout(clickTimeout);
+                  clickTimeout = setTimeout(() => {
+                    if (clickCount === 1 && !isSelecting) {
+                      isEditMode = false;
+                      selectCell(cell);
+                    }
+                    clickCount = 0;
+                  }, 300);
+                });
+                
+                // Double click handler - edit mode
+                cell.addEventListener("dblclick", (e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  e.stopImmediatePropagation();
+                  // Clear the click timeout immediately to prevent single click handler from interfering
+                  clearTimeout(clickTimeout);
+                  clickCount = 0;
+                  // Set edit mode flag immediately to prevent click handler from setting it to false
+                  isEditMode = true;
+                  // Enter edit mode
+                  enterEditMode(cell);
+                });
+                
+                rowElement.appendChild(cell);
+              }
+
+              fragment.appendChild(rowElement);
+            }
+
+            gridBody.appendChild(fragment);
+          }
+
+          // Resizable panes
+          function makeResizable(resizer, left, right, isVertical = true, isRightSide = false) {
+            let isResizing = false;
+
+            resizer.addEventListener("mousedown", (e) => {
+              isResizing = true;
+              document.body.style.cursor = isVertical ? "col-resize" : "row-resize";
+              document.body.style.userSelect = "none";
+            });
+
+            document.addEventListener("mousemove", (e) => {
+              if (!isResizing) return;
+
+              if (isVertical) {
+                if (isRightSide) {
+                  // For right side resizer, calculate from right edge
+                  const workbench = document.querySelector(".workbench");
+                  if (!workbench || !right) return;
+                  const workbenchRect = workbench.getBoundingClientRect();
+                  const rightEdge = workbenchRect.right;
+                  const newRightWidth = rightEdge - e.clientX;
+                  const minWidth = 200;
+                  const maxWidth = workbenchRect.width - 400;
+                  
+                  // Ensure we never set width to 0 or negative
+                  if (newRightWidth >= minWidth && newRightWidth <= maxWidth && newRightWidth > 0) {
+                    right.style.setProperty("width", `${newRightWidth}px`, "important");
+                    right.style.setProperty("min-width", "200px", "important");
+                    right.style.setProperty("flex", "0 0 auto", "important");
+                    right.style.setProperty("display", "flex", "important");
+                    left.style.flex = "1";
+                  }
+                } else {
+                  // For left side resizer, calculate from left edge
+                  const workbench = document.querySelector(".workbench");
+                  const workbenchRect = workbench.getBoundingClientRect();
+                  const newLeftWidth = e.clientX - workbenchRect.left;
+                  const minWidth = 150; // Match sidebar min-width
+                  const maxWidth = workbenchRect.width - 400;
+                  
+                  if (newLeftWidth >= minWidth && newLeftWidth <= maxWidth) {
+                    left.style.setProperty("width", `${newLeftWidth}px`, "important");
+                    left.style.setProperty("flex", "0 0 auto", "important");
+                    left.style.setProperty("display", "flex", "important");
+                    right.style.flex = "1";
+                  }
+                }
+              } else {
+                const container = left.parentElement;
+                const containerRect = container.getBoundingClientRect();
+                const newHeight = e.clientY - containerRect.top;
+                const minHeight = 100;
+                const maxHeight = containerRect.height - 100;
+                if (newHeight > minHeight && newHeight < maxHeight) {
+                  left.style.flex = `0 0 ${newHeight}px`;
+                  right.style.flex = "1";
+                }
+              }
+            });
+
+            document.addEventListener("mouseup", () => {
+              isResizing = false;
+              document.body.style.cursor = "";
+              document.body.style.userSelect = "";
+            });
+          }
+
+        // Initialize resizers
+        const leftResizer = document.getElementById("leftResizer");
+        const rightResizer = document.getElementById("rightResizer");
+        const middleResizer = document.getElementById("middleResizer");
+        const sidebar = document.querySelector(".sidebar");
+        const middleSection = document.querySelector(".middle-section");
+        const formulaEditor = document.querySelector(".formula-editor");
+        const gridContainer = document.querySelector(".grid-container");
+        const chatContainer = document.querySelector(".chat-container");
+
+        // Ensure sidebar is visible
+        if (sidebar) {
+          const viewportWidth = window.innerWidth;
+          const sidebarWidth = viewportWidth * 0.15; // 15% of screen
+          sidebar.style.width = `${sidebarWidth}px`;
+          sidebar.style.display = "flex";
+        }
+
+        // Ensure formula editor is visible and stays visible
+        if (formulaEditor) {
+          // Set initial styles
+          formulaEditor.style.setProperty("width", "400px", "important");
+          formulaEditor.style.setProperty("min-width", "200px", "important");
+          formulaEditor.style.setProperty("display", "flex", "important");
+          formulaEditor.style.setProperty("flex", "0 0 400px", "important");
+          
+          // Monitor and prevent it from being hidden
+          setInterval(() => {
+            const computedStyle = window.getComputedStyle(formulaEditor);
+            const width = computedStyle.width;
+            const display = computedStyle.display;
+            if (width === "0px" || display === "none" || formulaEditor.offsetWidth === 0) {
+              formulaEditor.style.setProperty("width", "400px", "important");
+              formulaEditor.style.setProperty("display", "flex", "important");
+              formulaEditor.style.setProperty("flex", "0 0 400px", "important");
+            }
+          }, 100);
+        }
+
+        // Initialize resizers with null checks
+        if (leftResizer && sidebar && middleSection) {
+          makeResizable(leftResizer, sidebar, middleSection, true, false);
+        }
+        
+        if (rightResizer && formulaEditor && middleSection) {
+          // Wait a bit before enabling resizing to ensure formula editor is visible
+          setTimeout(() => {
+            makeResizable(rightResizer, middleSection, formulaEditor, true, true);
+          }, 500);
+        }
+        
+        if (middleResizer && gridContainer && chatContainer) {
+          makeResizable(middleResizer, gridContainer, chatContainer, false);
+        }
+
+        // Chat functionality
+        const sendButton = document.getElementById("sendButton");
+        
+        function sendMessage() {
+          const message = chatInput.value.trim();
+          if (message) {
+            const messageDiv = document.createElement("div");
+            messageDiv.textContent = message;
+            messageDiv.style.marginBottom = "8px";
+            messageDiv.style.color = "var(--text)";
+            chatMessages.appendChild(messageDiv);
+            chatInput.value = "";
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+          }
+        }
+
+        chatInput.addEventListener("keydown", (e) => {
+          if (e.key === "Enter" && !e.shiftKey) {
+            e.preventDefault();
+            sendMessage();
+          }
+        });
+
+        sendButton.addEventListener("click", sendMessage);
+
+          // Build grid immediately - don't wait for Monaco
+          console.log("About to call buildGrid()");
+          buildGrid();
+          console.log("buildGrid() called");
+          
+          // Select A1 (first cell) after grid is built
+          const firstCell = gridBody.querySelector("tr:first-child td[data-col='0']");
+          if (firstCell) {
+            selectCell(firstCell);
+          }
+          
+          // Initialize custom overlay scrollbars
+          initCustomScrollbars();
+          
+          // Initialize sliding panes toggle functionality
+          // formulaEditor already declared above, reuse it
+          const paneHeaders = document.querySelectorAll('.pane-header');
+          
+          function updatePaneHeight(pane) {
+            if (!pane || !formulaEditor) return;
+            const formulaEditorHeight = formulaEditor.offsetHeight;
+            const headerHeight = 22; // Height of collapsed pane
+            const expandedHeight = formulaEditorHeight * 0.4; // 40% of formula editor
+            
+            if (pane.classList.contains('collapsed')) {
+              pane.style.height = `${headerHeight}px`;
+            } else {
+              pane.style.height = `${expandedHeight}px`;
+            }
+          }
+          
+          // Update pane heights on resize
+          function updateAllPaneHeights() {
+            document.querySelectorAll('.sliding-pane').forEach(pane => {
+              updatePaneHeight(pane);
+            });
+          }
+          
+          paneHeaders.forEach(header => {
+            header.addEventListener('click', () => {
+              const pane = header.closest('.sliding-pane');
+              if (pane) {
+                pane.classList.toggle('collapsed');
+                updatePaneHeight(pane);
+              }
+            });
+          });
+          
+          // Update heights on window resize
+          window.addEventListener('resize', updateAllPaneHeights);
+          
+          // Initial update - set all panes to collapsed state
+          document.querySelectorAll('.sliding-pane').forEach(pane => {
+            if (!pane.classList.contains('collapsed')) {
+              pane.classList.add('collapsed');
+            }
+            pane.style.height = '22px';
+          });
+        } catch (error) {
+          console.error("Error initializing app:", error);
+        }
+      });
+
+      function initCustomScrollbars() {
+        const gridWrapper = document.querySelector(".grid-wrapper");
+        const gridInner = document.getElementById("gridWrapperInner");
+        const scrollbarV = document.getElementById("customScrollbarV");
+        const scrollbarH = document.getElementById("customScrollbarH");
+
+        if (!gridWrapper || !gridInner || !scrollbarV || !scrollbarH) return;
+
+        function updateScrollbars() {
+          const scrollHeight = gridInner.scrollHeight;
+          const scrollWidth = gridInner.scrollWidth;
+          const clientHeight = gridInner.clientHeight;
+          const clientWidth = gridInner.clientWidth;
+          const scrollTop = gridInner.scrollTop;
+          const scrollLeft = gridInner.scrollLeft;
+
+          // Vertical scrollbar
+          if (scrollHeight > clientHeight) {
+            const thumbHeight = (clientHeight / scrollHeight) * clientHeight;
+            const thumbTop = (scrollTop / (scrollHeight - clientHeight)) * (clientHeight - thumbHeight);
+            scrollbarV.style.display = "block";
+            let thumbV = scrollbarV.querySelector(".custom-scrollbar-thumb");
+            if (!thumbV) {
+              thumbV = document.createElement("div");
+              thumbV.className = "custom-scrollbar-thumb";
+              scrollbarV.appendChild(thumbV);
+            }
+            thumbV.style.height = `${thumbHeight}px`;
+            thumbV.style.top = `${thumbTop}px`;
+          } else {
+            scrollbarV.style.display = "none";
+          }
+
+          // Horizontal scrollbar
+          if (scrollWidth > clientWidth) {
+            const thumbWidth = (clientWidth / scrollWidth) * clientWidth;
+            const thumbLeft = (scrollLeft / (scrollWidth - clientWidth)) * (clientWidth - thumbWidth);
+            scrollbarH.style.display = "block";
+            let thumbH = scrollbarH.querySelector(".custom-scrollbar-thumb");
+            if (!thumbH) {
+              thumbH = document.createElement("div");
+              thumbH.className = "custom-scrollbar-thumb";
+              scrollbarH.appendChild(thumbH);
+            }
+            thumbH.style.width = `${thumbWidth}px`;
+            thumbH.style.left = `${thumbLeft}px`;
+          } else {
+            scrollbarH.style.display = "none";
+          }
+        }
+
+        // Scrollbar dragging
+        let isDraggingV = false;
+        let isDraggingH = false;
+        let startY = 0;
+        let startX = 0;
+        let startScrollTop = 0;
+        let startScrollLeft = 0;
+
+        scrollbarV.addEventListener("mousedown", (e) => {
+          if (e.target.classList.contains("custom-scrollbar-thumb")) {
+            isDraggingV = true;
+            startY = e.clientY;
+            startScrollTop = gridInner.scrollTop;
+            e.preventDefault();
+          } else {
+            // Click on track
+            const rect = scrollbarV.getBoundingClientRect();
+            const clickY = e.clientY - rect.top;
+            const scrollHeight = gridInner.scrollHeight;
+            const clientHeight = gridInner.clientHeight;
+            const newScrollTop = (clickY / clientHeight) * scrollHeight;
+            gridInner.scrollTop = newScrollTop;
+          }
+        });
+
+        scrollbarH.addEventListener("mousedown", (e) => {
+          if (e.target.classList.contains("custom-scrollbar-thumb")) {
+            isDraggingH = true;
+            startX = e.clientX;
+            startScrollLeft = gridInner.scrollLeft;
+            e.preventDefault();
+          } else {
+            // Click on track
+            const rect = scrollbarH.getBoundingClientRect();
+            const clickX = e.clientX - rect.left;
+            const scrollWidth = gridInner.scrollWidth;
+            const clientWidth = gridInner.clientWidth;
+            const newScrollLeft = (clickX / clientWidth) * scrollWidth;
+            gridInner.scrollLeft = newScrollLeft;
+          }
+        });
+
+        document.addEventListener("mousemove", (e) => {
+          if (isDraggingV) {
+            const deltaY = e.clientY - startY;
+            const scrollHeight = gridInner.scrollHeight;
+            const clientHeight = gridInner.clientHeight;
+            const scrollRatio = deltaY / clientHeight;
+            gridInner.scrollTop = startScrollTop + (scrollRatio * scrollHeight);
+          }
+          if (isDraggingH) {
+            const deltaX = e.clientX - startX;
+            const scrollWidth = gridInner.scrollWidth;
+            const clientWidth = gridInner.clientWidth;
+            const scrollRatio = deltaX / clientWidth;
+            gridInner.scrollLeft = startScrollLeft + (scrollRatio * scrollWidth);
+          }
+        });
+
+        document.addEventListener("mouseup", () => {
+          isDraggingV = false;
+          isDraggingH = false;
+        });
+
+        gridInner.addEventListener("scroll", () => {
+          updateScrollbars();
+          // Update selection overlay position on scroll
+          if (selectedCells && selectedCells.size > 0) {
+            updateSelectionOverlay();
+          }
+        });
+        window.addEventListener("resize", updateScrollbars);
+        updateScrollbars();
+      }
+    </script>
+  </body>
+</html>
