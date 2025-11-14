@@ -2208,12 +2208,35 @@
                       if (cellRef && window.hf) {
                         // Use HyperFormula to set and calculate the cell value
                         setCellValue(cellRef, formula);
+                        
+                        // Trigger blink animation on cell border when executing formula
+                        // Temporarily remove and re-add edit-mode class to trigger animation
+                        if (cell && cell.classList.contains('edit-mode')) {
+                          cell.classList.remove('edit-mode');
+                          // Use requestAnimationFrame to ensure the class removal is processed before re-adding
+                          requestAnimationFrame(() => {
+                            requestAnimationFrame(() => {
+                              // Re-add the class to trigger the blink animation
+                              cell.classList.add('edit-mode');
+                            });
+                          });
+                        }
                       } else {
                         // Fallback if HyperFormula not available or not initialized
                         console.warn("HyperFormula not ready. hf:", !!window.hf, "hfSheetId:", window.hfSheetId);
                         const display = cell.querySelector(".grid-cell-display");
                         if (display) {
                           display.textContent = formula;
+                        }
+                        
+                        // Trigger blink animation even in fallback
+                        if (cell && cell.classList.contains('edit-mode')) {
+                          cell.classList.remove('edit-mode');
+                          requestAnimationFrame(() => {
+                            requestAnimationFrame(() => {
+                              cell.classList.add('edit-mode');
+                            });
+                          });
                         }
                       }
                       
@@ -2376,6 +2399,12 @@
             
             // Set edit mode flag first
             isEditMode = true;
+            
+            // Hide selection overlay with triangle fill handle when entering edit mode
+            const overlay = document.getElementById("selectionOverlay");
+            if (overlay) {
+              overlay.style.display = "none";
+            }
             
             // Add edit-mode class to editor-wrapper for styling
             const editorWrapper = document.querySelector('.editor-wrapper');
@@ -2553,6 +2582,19 @@
             const sheetId = 0;
             
             try {
+              // First, check if cell has a formula
+              let hasFormula = false;
+              let storedFormula = null;
+              try {
+                storedFormula = window.hf.getCellFormula({ col, row, sheet: sheetId });
+                if (storedFormula) {
+                  hasFormula = true;
+                }
+              } catch (e) {
+                // Cell doesn't have a formula, it's a plain value
+                hasFormula = false;
+              }
+              
               // Get the calculated value from HyperFormula
               const cellValue = window.hf.getCellValue({ col, row, sheet: sheetId });
               
@@ -2564,6 +2606,18 @@
                   // Show the calculated result (without "=" prefix)
                   const displayValue = cellValue !== null && cellValue !== undefined ? cellValue.toString() : "";
                   display.textContent = displayValue;
+                  
+                  // Store the formula or value in data-formula attribute for quick retrieval
+                  // Formulas have "=" prefix, plain values don't
+                  if (hasFormula && storedFormula) {
+                    cell.setAttribute("data-formula", storedFormula);
+                  } else if (cellValue !== null && cellValue !== undefined && cellValue !== "") {
+                    // Store plain value (without "=" prefix) so selectCell can retrieve it
+                    cell.setAttribute("data-formula", cellValue.toString());
+                  } else {
+                    // Empty cell - clear the attribute
+                    cell.removeAttribute("data-formula");
+                  }
                   
                   // Determine if value is a number or date (right-align) vs text (left-align)
                   let isNumber = false;
@@ -2833,7 +2887,8 @@
           // Function to update the selection overlay rectangle
           function updateSelectionOverlay() {
             const overlay = document.getElementById("selectionOverlay");
-            if (!overlay || selectedCells.size === 0) {
+            // Hide overlay if in edit mode or no cells selected
+            if (!overlay || selectedCells.size === 0 || isEditMode) {
               if (overlay) overlay.style.display = "none";
               return;
             }
@@ -3118,42 +3173,45 @@
                 
                 // Set the value directly using setValue
                 // This is more reliable than executeEdits
-                currentEditor.setValue(fullValue);
-                
-                // Set cursor position after setting value
-                if (window.monaco && window.monaco.Range) {
-                  currentEditor.setPosition({ lineNumber: targetLine, column: targetColumn });
-                } else {
-                  // Fallback if monaco isn't loaded yet
-                  setTimeout(() => {
+                // Use requestAnimationFrame to ensure the editor is ready
+                requestAnimationFrame(() => {
+                  currentEditor.setValue(fullValue);
+                  
+                  // Set cursor position after setting value
+                  if (window.monaco && window.monaco.Range) {
                     currentEditor.setPosition({ lineNumber: targetLine, column: targetColumn });
-                  }, 0);
-                }
-                
-                // Reset flag after operations complete
-                Promise.resolve().then(() => {
-                  window.isProgrammaticCursorChange = false;
-                });
-                
-                currentEditor.updateOptions({ 
-                  readOnly: !isEditMode, // Read-only when not in edit mode
-                  cursorBlinking: isEditMode ? 'blink' : 'hidden', // Show cursor only in edit mode
-                  cursorStyle: 'line'
-                });
-                
-                // Don't auto-focus in selection mode - only in edit mode
-                // Also blur and ensure cursor is hidden when not in edit mode
-                if (isEditMode && typeof currentEditor.focus === 'function') {
-                  currentEditor.focus();
-                } else if (!isEditMode) {
-                  // Blur the editor to ensure cursor is completely hidden
-                  // Also force cursor to be hidden via CSS (handled in styles.css)
-                  if (typeof currentEditor.blur === 'function') {
-                    currentEditor.blur();
+                  } else {
+                    // Fallback if monaco isn't loaded yet
+                    setTimeout(() => {
+                      currentEditor.setPosition({ lineNumber: targetLine, column: targetColumn });
+                    }, 0);
                   }
-                  // Force update to ensure cursor is hidden
-                  currentEditor.render(true);
-                }
+                  
+                  // Reset flag after operations complete
+                  Promise.resolve().then(() => {
+                    window.isProgrammaticCursorChange = false;
+                  });
+                  
+                  currentEditor.updateOptions({ 
+                    readOnly: !isEditMode, // Read-only when not in edit mode
+                    cursorBlinking: isEditMode ? 'blink' : 'hidden', // Show cursor only in edit mode
+                    cursorStyle: 'line'
+                  });
+                  
+                  // Don't auto-focus in selection mode - only in edit mode
+                  // Also blur and ensure cursor is hidden when not in edit mode
+                  if (isEditMode && typeof currentEditor.focus === 'function') {
+                    currentEditor.focus();
+                  } else if (!isEditMode) {
+                    // Blur the editor to ensure cursor is completely hidden
+                    // Also force cursor to be hidden via CSS (handled in styles.css)
+                    if (typeof currentEditor.blur === 'function') {
+                      currentEditor.blur();
+                    }
+                    // Force update to ensure cursor is hidden
+                    currentEditor.render(true);
+                  }
+                });
               }
             } else {
               const currentEditor = window.monacoEditor || editor;
@@ -3233,6 +3291,11 @@
                 }
                 // Force re-render to ensure cursor is hidden
                 currentEditor.render(true);
+              }
+              
+              // Show selection overlay with triangle fill handle when exiting edit mode
+              if (typeof updateSelectionOverlay === 'function') {
+                updateSelectionOverlay();
               }
               
               // Monaco Editor doesn't have blur(), just exit edit mode
@@ -3624,6 +3687,11 @@
                           currentEditor.blur();
                         }
                         currentEditor.render(true);
+                      }
+                      
+                      // Show selection overlay with triangle fill handle when entering selection mode
+                      if (typeof updateSelectionOverlay === 'function') {
+                        updateSelectionOverlay();
                       }
                       
                       selectCell(cell);

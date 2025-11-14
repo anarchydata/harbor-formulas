@@ -541,6 +541,35 @@ button {
   background-image: none !important;
 }
 
+/* Blink border 3 times when entering edit mode - quick succession */
+/* Override any pulse animations with the blink animation */
+.grid-table tbody td.selected.edit-mode::after {
+  animation: blinkBorder 0.36s ease-in-out;
+  /* Remove pulse animations during edit mode - just show solid border after blink */
+}
+
+/* Blink animation for cell border when entering edit mode - 3 quick blinks */
+@keyframes blinkBorder {
+  0%, 100% {
+    opacity: 1;
+  }
+  16.66%, 27.77% {
+    opacity: 0.2;
+  }
+  33.33%, 44.44% {
+    opacity: 1;
+  }
+  50%, 61.11% {
+    opacity: 0.2;
+  }
+  66.66%, 77.77% {
+    opacity: 1;
+  }
+  83.33%, 94.44% {
+    opacity: 0.2;
+  }
+}
+
 /* Calm, tranquil pulse animation for single cell - uniform glow all around */
 @keyframes tranquilPulseUniform {
   0%, 100% {
@@ -647,12 +676,14 @@ button {
 /* Glow animation - apply uniform glow to all outer edge cells (multi-cell selection) */
 /* This creates a continuous uniform glow around the entire selection rectangle */
 /* Use filter drop-shadow which glows the visible borders */
-.grid-table tbody td.selected[data-selection-edge]::after {
+/* Don't apply pulse in edit mode - only blink animation */
+.grid-table tbody td.selected:not(.edit-mode)[data-selection-edge]::after {
   animation: tranquilPulseUniformFilter 3s ease-in-out infinite;
 }
 
 /* All four edges (single cell) - uniform glow on all sides */
-.grid-table tbody td.selected[data-selection-edge*="top"][data-selection-edge*="bottom"][data-selection-edge*="left"][data-selection-edge*="right"]::after {
+/* Don't apply pulse in edit mode - only blink animation */
+.grid-table tbody td.selected:not(.edit-mode)[data-selection-edge*="top"][data-selection-edge*="bottom"][data-selection-edge*="left"][data-selection-edge*="right"]::after {
   animation: tranquilPulseUniform 4s ease-in-out infinite;
   filter: none; /* Use box-shadow animation instead of filter */
 }
@@ -854,19 +885,12 @@ button {
   /* No transition - instant background change */
 }
 
-/* Monaco editor text opacity - 30% in selection mode (only text, not background) */
-/* Target only the spans containing text, not the line containers */
-.editor-wrapper .monaco-editor .view-line span {
-  opacity: 0.3;
-  /* No transition - instant opacity change */
-}
-
 .editor-wrapper.editor-edit-mode {
   background: #000000; /* Still black in edit mode (no change needed) */
 }
 
-/* Monaco editor text opacity - 100% in edit mode (full opacity) */
-.editor-wrapper.editor-edit-mode .monaco-editor .view-line span {
+/* Monaco editor text - always full opacity, no opacity changes */
+.editor-wrapper .monaco-editor .view-line span {
   opacity: 1;
 }
 
