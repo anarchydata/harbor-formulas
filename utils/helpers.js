@@ -173,46 +173,56 @@ export function detectCellReferences(text) {
   if (!text) return [];
 
   const cellRefs = [];
-  const cellPattern = /(?:'[^']+'!)?(?:(?:([A-Z]+\$?[0-9]+\$?)(?::([A-Z]+\$?[0-9]+\$?))*)|([A-Z]+)\$?:([A-Z]+)\$?)/gi;
-  let match;
+  const seen = new Set();
 
+  const cellPattern = /(?:'[^']+'!)?(\$?[A-Z]+\$?[0-9]+\$?)(?:\s*:\s*(\$?[A-Z]+\$?[0-9]+\$?)?)?/gi;
+  const columnPattern = /(?:'[^']+'!)?(\$?[A-Z]+)\s*:\s*(\$?[A-Z]+)/gi;
+
+  function addMatch(fullMatch, startIndex) {
+    const withoutSheet = fullMatch.includes('!') ? fullMatch.substring(fullMatch.indexOf('!') + 1) : fullMatch;
+    const compactRef = withoutSheet.replace(/\s+/g, '');
+    const hasDigits = /\d/.test(compactRef);
+    const hasColon = compactRef.includes(':');
+    if (!hasDigits && !hasColon) {
+      return;
+    }
+
+    const key = `${startIndex}:${compactRef}`;
+    if (seen.has(key)) {
+      return;
+    }
+    seen.add(key);
+
+    let endIndex = startIndex + fullMatch.length;
+    if (compactRef.endsWith(':')) {
+      const trailingWhitespace = fullMatch.match(/\s+$/);
+      if (trailingWhitespace && trailingWhitespace[0]) {
+        endIndex -= trailingWhitespace[0].length;
+      }
+    }
+
+    cellRefs.push({
+      text: compactRef,
+      start: startIndex,
+      end: endIndex,
+      range: compactRef,
+      fullMatch
+    });
+  }
+
+  let match;
   while ((match = cellPattern.exec(text)) !== null) {
     if (isInsideQuotes(text, match.index)) {
       continue;
     }
+    addMatch(match[0], match.index);
+  }
 
-    const fullMatch = match[0];
-    let cellRef = fullMatch.includes('!') ? fullMatch.substring(fullMatch.indexOf('!') + 1) : fullMatch;
-
-    if (match[1]) {
-      cellRef = match[1];
-      if (match[2]) {
-        cellRef += `:${match[2]}`;
-        const secondColonIndex = fullMatch.indexOf(':', fullMatch.indexOf(':') + 1);
-        if (secondColonIndex !== -1) {
-          cellRef += fullMatch.substring(secondColonIndex);
-        }
-      }
-    } else if (match[3] && match[4]) {
-      cellRef = `${match[3]}:${match[4]}`;
-    }
-
-    const hasDigits = /[0-9]/.test(cellRef);
-    const hasColon = cellRef.includes(':');
-    if (!hasDigits && !hasColon) {
+  while ((match = columnPattern.exec(text)) !== null) {
+    if (isInsideQuotes(text, match.index)) {
       continue;
     }
-
-    const startIndex = match.index;
-    const endIndex = startIndex + fullMatch.length;
-
-    cellRefs.push({
-      text: cellRef,
-      start: startIndex,
-      end: endIndex,
-      range: cellRef,
-      fullMatch
-    });
+    addMatch(match[0], match.index);
   }
 
   return cellRefs;
