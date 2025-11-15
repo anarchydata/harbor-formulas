@@ -210,7 +210,7 @@ button {
 }
 
 .folder-content {
-  padding-left: 20px;
+  padding-left: 16px;
 }
 
 .folder-content.collapsed {
@@ -218,7 +218,7 @@ button {
 }
 
 .file-item {
-  padding: 3px 8px 3px 28px;
+  padding: 3px 8px 3px 24px;
   display: flex;
   align-items: center;
   gap: 6px;
@@ -237,9 +237,9 @@ button {
 
 .file-item.selected {
   background: #2d2d30;
-  margin-left: -20px;
-  width: calc(100% + 20px);
-  padding-left: 28px;
+  margin-left: 0;
+  width: 100%;
+  padding-left: 24px;
 }
 
 .file-icon {

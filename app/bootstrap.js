@@ -2132,6 +2132,8 @@ export async function initializeApp() {
                       };
                     }
 
+                    const LINE_CONTINUATION_CHARS = new Set(['+', '-', '*', '/', '^', '&', '=', '<', '>', ',', '(', '{', ':', ';', '!']);
+
                     function analyzeParentheses(text) {
                       let openParens = 0;
                       let closeParens = 0;
@@ -2195,6 +2197,151 @@ export async function initializeApp() {
                       }
 
                       return { openParens, closeParens, firstExtraClosingIndex };
+                    }
+
+                    function detectStrayTopLevelText(fullText = '') {
+                      if (!fullText) {
+                        return [];
+                      }
+
+                      const straySegments = [];
+                      const rawLines = fullText.split('\n');
+                      let parenDepth = 0;
+                      let braceDepth = 0;
+                      let inDoubleQuotes = false;
+                      let inSingleQuotes = false;
+                      let inBlockComment = false;
+                      let formulaStarted = false;
+                      let previousLineAllowsContinuation = true;
+
+                      for (let lineIndex = 0; lineIndex < rawLines.length; lineIndex++) {
+                        const originalLine = rawLines[lineIndex];
+                        const line = originalLine.endsWith('\r') ? originalLine.slice(0, -1) : originalLine;
+                        const stateBeforeLine = {
+                          parenDepth,
+                          braceDepth,
+                          inDoubleQuotes,
+                          inSingleQuotes,
+                          previousLineAllowsContinuation
+                        };
+
+                        let sanitizedLine = '';
+                        let i = 0;
+                        let lastSignificantChar = null;
+
+                        while (i < line.length) {
+                          const char = line[i];
+                          const nextChar = line[i + 1];
+
+                          if (inBlockComment) {
+                            if (char === '*' && nextChar === '/') {
+                              inBlockComment = false;
+                              i += 2;
+                            } else {
+                              i++;
+                            }
+                            continue;
+                          }
+
+                          if (!inSingleQuotes && !inDoubleQuotes && char === '/' && nextChar === '*') {
+                            inBlockComment = true;
+                            i += 2;
+                            continue;
+                          }
+
+                          if (!inSingleQuotes && !inDoubleQuotes && char === '/' && nextChar === '/') {
+                            break;
+                          }
+
+                          sanitizedLine += char;
+
+                          if (!inSingleQuotes && char === '"') {
+                            if (nextChar === '"') {
+                              sanitizedLine += nextChar;
+                              i += 2;
+                              continue;
+                            }
+                            inDoubleQuotes = !inDoubleQuotes;
+                            i++;
+                            continue;
+                          }
+
+                          if (!inDoubleQuotes && char === "'") {
+                            if (nextChar === "'") {
+                              sanitizedLine += nextChar;
+                              i += 2;
+                              continue;
+                            }
+                            inSingleQuotes = !inSingleQuotes;
+                            i++;
+                            continue;
+                          }
+
+                          if (!inDoubleQuotes && !inSingleQuotes) {
+                            if (char === '{') {
+                              braceDepth++;
+                            } else if (char === '}' && braceDepth > 0) {
+                              braceDepth--;
+                            } else if (braceDepth === 0) {
+                              if (char === '(') {
+                                parenDepth++;
+                              } else if (char === ')' && parenDepth > 0) {
+                                parenDepth--;
+                              }
+                            }
+
+                            if (!/\s/.test(char)) {
+                              lastSignificantChar = char;
+                            }
+                          }
+
+                          i++;
+                        }
+
+                        const trimmed = sanitizedLine.trim();
+                        const hasContent = trimmed.length > 0;
+
+                        if (!formulaStarted && hasContent && trimmed.startsWith('=')) {
+                          formulaStarted = true;
+                        }
+
+                        if (
+                          formulaStarted &&
+                          hasContent &&
+                          !stateBeforeLine.inDoubleQuotes &&
+                          !stateBeforeLine.inSingleQuotes
+                        ) {
+                          const startsWithOperator = /^[+\-*/^&=)]/.test(trimmed);
+                          const startsWithComma = trimmed.startsWith(',');
+                          const allowsOperatorContinuation =
+                            startsWithOperator ||
+                            (startsWithComma && stateBeforeLine.parenDepth > 0) ||
+                            (trimmed.startsWith(':') && stateBeforeLine.braceDepth > 0);
+
+                          if (!stateBeforeLine.previousLineAllowsContinuation && !allowsOperatorContinuation) {
+                            const leadingWhitespaceMatch = line.match(/^\s*/);
+                            const leadingWhitespaceLength = leadingWhitespaceMatch ? leadingWhitespaceMatch[0].length : 0;
+                            straySegments.push({
+                              lineNumber: lineIndex + 1,
+                              startColumn: leadingWhitespaceLength + 1,
+                              endColumn: line.length + 1
+                            });
+                          }
+                        }
+
+                        if (hasContent) {
+                          const endsWithContinuationChar =
+                            lastSignificantChar !== null && LINE_CONTINUATION_CHARS.has(lastSignificantChar);
+                          previousLineAllowsContinuation =
+                            parenDepth > 0 ||
+                            braceDepth > 0 ||
+                            inDoubleQuotes ||
+                            inSingleQuotes ||
+                            endsWithContinuationChar;
+                        }
+                      }
+
+                      return straySegments;
                     }
 
                     const externalDiagnosticsProvider =
@@ -2313,35 +2460,19 @@ export async function initializeApp() {
                           });
                         }
 
-                        // 2. Check for disconnected expressions (on same line or across lines)
-                        // Expressions must be connected by operators or ampersand
-
-                        // Remove comments for this check (keep line structure)
-                        const linesWithoutComments = lines.map(line => {
-                          // Find // that's not inside a string
-                          let inString = false;
-                          let escaped = false;
-                          let commentIndex = -1;
-
-                          for (let i = 0; i < line.length - 1; i++) {
-                            if (escaped) {
-                              escaped = false;
-                              continue;
-                            }
-                            if (line[i] === '\\') {
-                              escaped = true;
-                              continue;
-                            }
-                            if (line[i] === '"') {
-                              inString = !inString;
-                              continue;
-                            }
-                            if (!inString && line[i] === '/' && line[i + 1] === '/') {
-                              commentIndex = i;
-                              break;
-                            }
-                          }
-                          return commentIndex >= 0 ? line.substring(0, commentIndex) : line;
+                        // 2. Check for disconnected expressions / stray text
+                        const straySegments = detectStrayTopLevelText(fullText);
+                        straySegments.forEach((segment) => {
+                          diagnostics.push({
+                            severity: monaco.MarkerSeverity.Error,
+                            startLineNumber: segment.lineNumber,
+                            startColumn: segment.startColumn,
+                            endLineNumber: segment.lineNumber,
+                            endColumn: segment.endColumn,
+                            message: 'Stray text detected outside the main formula. Remove or convert it into a comment (//).',
+                            source: 'Formula Validator',
+                            code: 'STRAY_TEXT'
+                          });
                         });
 
                         // 3. Check for periods in function arguments (should be commas)
@@ -4224,20 +4355,28 @@ export async function initializeApp() {
                   const editorDomNode = editor.getDomNode();
                   if (editorDomNode) {
                     editorDomNode.addEventListener('click', (e) => {
-                      if (currentMode === MODES.EDIT) {
-                        editor.updateOptions({ cursorBlinking: 'blink' });
-                        return;
-                      }
-
-                      if (!window.selectedCell) {
-                        return;
-                      }
-
                       let targetPosition = null;
                       try {
                         targetPosition = editor.getTargetAtClientPoint(e.clientX, e.clientY);
                       } catch (err) {
                         // Ignore if positioning fails
+                      }
+
+                      if (currentMode === MODES.EDIT) {
+                        editor.updateOptions({ cursorBlinking: 'blink' });
+                        if (targetPosition && targetPosition.position) {
+                          const { lineNumber, column } = targetPosition.position;
+                          editor.setPosition({ lineNumber, column });
+                          updateEditorStatusDisplay({ lineNumber, column });
+                          if (typeof syncEditingCellDisplayWithPane === 'function') {
+                            requestAnimationFrame(() => syncEditingCellDisplayWithPane(false, editor));
+                          }
+                        }
+                        return;
+                      }
+
+                      if (!window.selectedCell) {
+                        return;
                       }
 
                       if (currentMode === MODES.ENTER) {
