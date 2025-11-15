@@ -20,6 +20,15 @@
               <path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001c.03.04 062.078.098.115.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1.007 1.007 0 0 0-.115-.1zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0z"/>
             </svg>
           </div>
+          <button
+            class="sidebar-icon sidebar-collapse-toggle"
+            id="sidebarCollapseToggle"
+            type="button"
+            aria-expanded="true"
+            title="Collapse File Explorer"
+          >
+            &lt;&lt;
+          </button>
         </div>
         <div class="file-tree">
           <div class="folder-header" id="projectFolder">
@@ -54,15 +63,21 @@
                 <tbody id="gridBody"></tbody>
               </table>
               <div class="selection-overlay" id="selectionOverlay">
+                <div class="selection-border-handle selection-border-handle-top" data-edge="top"></div>
+                <div class="selection-border-handle selection-border-handle-right" data-edge="right"></div>
+                <div class="selection-border-handle selection-border-handle-bottom" data-edge="bottom"></div>
+                <div class="selection-border-handle selection-border-handle-left" data-edge="left"></div>
                 <div class="fill-handle" id="fillHandle"></div>
               </div>
             </div>
             <div class="custom-scrollbar-vertical" id="customScrollbarV"></div>
             <div class="custom-scrollbar-horizontal" id="customScrollbarH"></div>
           </div>
-          <div class="tabs-bar">
-            <button class="tab active" type="button">Sheet1</button>
-            <button class="tab" type="button">+</button>
+          <div class="tabs-bar" id="sheetTabsBar">
+            <button class="tab active" type="button" data-sheet-id="0" data-sheet-name="Sheet1">
+              Sheet1
+            </button>
+            <button class="tab tab-add" type="button" aria-label="Add sheet">+</button>
           </div>
         </div>
 
@@ -70,32 +85,26 @@
         <div class="resizer horizontal" id="middleResizer"></div>
 
         <!-- Chat Section (40%) -->
-        <div class="chat-container">
-          <div class="chat-header">Chat</div>
-          <div class="chat-messages" id="chatMessages"></div>
-          <div class="chat-input-area">
-            <div class="chat-input-wrapper">
-              <textarea
-                class="chat-input"
-                id="chatInput"
-                rows="3"
-                placeholder="Plan, @ for context, / for commands"
-              ></textarea>
-              <div class="chat-buttons">
-                <button class="chat-button image" type="button" title="Upload image">
-                  <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-                    <path d="M6.002 5.5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0z"/>
-                    <path d="M14.002 1a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2h-12a2 2 0 0 1-2-2V3a2 2 0 0 1 2-2h12zm-12 1a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V3a1 1 0 0 0-1-1h-12z"/>
-                    <path d="M10.648 7.646a.5.5 0 0 1 .707 0l2.5 2.5a.5.5 0 0 1-.707.707l-2.147-2.146-1.146 1.147a.5.5 0 0 1-.707 0l-2.5-2.5a.5.5 0 1 1 .707-.707l2.146 2.147 1.147-1.146z"/>
-                  </svg>
-                </button>
-                <button class="chat-button send" type="button" id="sendButton" title="Send">
-                  <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-                    <path d="M8 15A7 7 0 1 0 8 1a7 7 0 0 0 0 14zm.5-4.5a.5.5 0 0 1-1 0V5.707L5.354 7.854a.5.5 0 1 1-.708-.708l3-3a.5.5 0 0 1 .708 0l3 3a.5.5 0 0 1-.708.708L8.5 5.707V10.5z"/>
-                  </svg>
-                </button>
-              </div>
-            </div>
+        <div class="chat-container" id="chatContainer">
+          <div class="chat-toolbar">
+            <button
+              class="chat-collapse-btn"
+              id="chatCollapseToggle"
+              type="button"
+              aria-expanded="true"
+              aria-controls="clappyConsole"
+              title="Collapse chat panel"
+            >
+              &darr;&darr;
+            </button>
+          </div>
+          <div class="clappy-console" id="clappyConsole" aria-label="Clappy command console">
+            <section class="clappy-transcript" id="clappyTranscript" aria-live="polite">
+              <form class="clappy-form" id="clappyForm" autocomplete="off">
+                <span class="clappy-prompt">&gt;</span>
+                <input id="clappyInput" name="prompt" type="text" autocomplete="off" />
+              </form>
+            </section>
           </div>
         </div>
       </div>
@@ -118,6 +127,14 @@
           </div>
         </div>
         <div class="bottom-panes">
+          <div class="sliding-pane result-pane collapsed">
+            <div class="pane-header" data-pane="result">
+              <span class="pane-toggle"></span>
+              <span class="pane-title">RESULT</span>
+              <span class="pane-header-value" id="resultHeaderValue"></span>
+            </div>
+            <div class="pane-content" id="resultContent"></div>
+          </div>
           <div class="sliding-pane messages-pane collapsed">
             <div class="pane-header" data-pane="messages">
               <span class="pane-toggle"></span>
@@ -160,6 +177,11 @@
         extendWithCustomFunctions,
         BASE_CHIP_COLORS
       } from './utils/helpers.js';
+      import {
+        generateValueFill,
+        AutofillDirection,
+        adjustFormulaReferences
+      } from './utils/autofill.js';
 
       // Configure MonacoEnvironment BEFORE importing monaco-editor
       // This must be set before Monaco tries to create workers
@@ -212,7 +234,8 @@
           
           // Initialize HyperFormula instance (following official documentation)
           window.hf = HyperFormula.buildEmpty({
-            licenseKey: 'gpl-v3' // Using GPL license for open source projects
+            licenseKey: 'gpl-v3', // Using GPL license for open source projects
+            undoLimit: 500
           });
           
           // Initialize named ranges storage (Set for fast lookup)
@@ -256,8 +279,170 @@
           const monacoEditorContainer = document.getElementById("monacoEditor");
           const gridBody = document.getElementById("gridBody");
           const gridHeaderElement = document.getElementById("gridHeader");
-          const chatInput = document.getElementById("chatInput");
-          const chatMessages = document.getElementById("chatMessages");
+          const gridWrapperInner = document.getElementById("gridWrapperInner");
+          const fillHandleElement = document.getElementById("fillHandle");
+        const clappyTranscript = document.getElementById("clappyTranscript");
+        const clappyForm = document.getElementById("clappyForm");
+        const clappyInput = document.getElementById("clappyInput");
+        const chatCollapseToggle = document.getElementById("chatCollapseToggle");
+        const mainChatContainer = document.getElementById("chatContainer");
+        const clappyConsole = document.getElementById("clappyConsole");
+        const sidebarElement = document.querySelector(".sidebar");
+        const sidebarToggleButton = document.getElementById("sidebarCollapseToggle");
+        const sheetTabsBarElement = document.getElementById("sheetTabsBar");
+
+        function updateSidebarToggleState(isCollapsed) {
+          if (!sidebarToggleButton) {
+            return;
+          }
+          sidebarToggleButton.textContent = isCollapsed ? ">>" : "<<";
+          sidebarToggleButton.setAttribute("title", isCollapsed ? "Expand File Explorer" : "Collapse File Explorer");
+          sidebarToggleButton.setAttribute("aria-expanded", (!isCollapsed).toString());
+        }
+
+        if (sidebarElement && sidebarToggleButton) {
+          sidebarToggleButton.addEventListener("click", () => {
+            const isCollapsed = sidebarElement.classList.toggle("collapsed");
+            updateSidebarToggleState(isCollapsed);
+          });
+          updateSidebarToggleState(sidebarElement.classList.contains("collapsed"));
+        }
+
+        function getActiveSheetId() {
+          return typeof window.hfSheetId === "number" ? window.hfSheetId : 0;
+        }
+
+        function syncActiveSheetTabFromHyperFormula() {
+          if (!sheetTabsBarElement || !window.hf) {
+            return;
+          }
+
+          const activeTab = sheetTabsBarElement.querySelector(".tab.active:not(.tab-add)");
+          if (!activeTab) {
+            return;
+          }
+
+          const sheetId = getActiveSheetId();
+          let sheetNameFromHF = activeTab.dataset.sheetName || activeTab.textContent?.trim() || `Sheet${sheetId + 1}`;
+
+          try {
+            const hfSheetName = window.hf.getSheetName(sheetId);
+            if (typeof hfSheetName === "string" && hfSheetName.trim()) {
+              sheetNameFromHF = hfSheetName.trim();
+            }
+          } catch (error) {
+            console.warn("Could not read sheet name from HyperFormula", error);
+          }
+
+          activeTab.dataset.sheetId = String(sheetId);
+          activeTab.dataset.sheetName = sheetNameFromHF;
+          activeTab.textContent = sheetNameFromHF;
+        }
+
+        function startSheetRename(tabButton) {
+          if (!tabButton || tabButton.dataset.renaming === "true") {
+            return;
+          }
+
+          const parentElement = tabButton.parentElement;
+          if (!parentElement) {
+            return;
+          }
+
+          const sheetId = Number.parseInt(tabButton.dataset.sheetId ?? `${getActiveSheetId()}`, 10) || getActiveSheetId();
+          const existingName = (tabButton.dataset.sheetName || tabButton.textContent || "").trim() || `Sheet${sheetId + 1}`;
+          const renameInput = document.createElement("input");
+          renameInput.type = "text";
+          renameInput.value = existingName;
+          renameInput.className = "tab-rename-input";
+          renameInput.setAttribute("aria-label", "Rename sheet");
+          renameInput.style.width = `${Math.max(tabButton.offsetWidth, 60)}px`;
+          renameInput.style.height = `${tabButton.offsetHeight}px`;
+
+          tabButton.dataset.renaming = "true";
+          parentElement.replaceChild(renameInput, tabButton);
+          renameInput.focus();
+          renameInput.select();
+
+          const finalizeRename = (shouldCommit) => {
+            if (!renameInput.isConnected) {
+              return;
+            }
+
+            renameInput.removeEventListener("keydown", handleKeydown);
+            renameInput.removeEventListener("blur", handleBlur);
+
+            parentElement.replaceChild(tabButton, renameInput);
+            tabButton.dataset.renaming = "false";
+
+            if (!shouldCommit) {
+              tabButton.textContent = existingName;
+              tabButton.dataset.sheetName = existingName;
+              return;
+            }
+
+            const requestedName = renameInput.value.trim();
+            const finalName = requestedName || existingName;
+
+            tabButton.textContent = finalName;
+            tabButton.dataset.sheetName = finalName;
+            tabButton.dataset.sheetId = String(sheetId);
+
+            if (finalName === existingName) {
+              return;
+            }
+
+            try {
+              window.hf.renameSheet(sheetId, finalName);
+              console.log(`Renamed sheet ${sheetId} to ${finalName}`);
+            } catch (error) {
+              console.error("Failed to rename sheet:", error);
+              tabButton.textContent = existingName;
+              tabButton.dataset.sheetName = existingName;
+            }
+          };
+
+          const handleKeydown = (event) => {
+            if (event.key === "Enter") {
+              event.preventDefault();
+              finalizeRename(true);
+            } else if (event.key === "Escape") {
+              event.preventDefault();
+              finalizeRename(false);
+            }
+          };
+
+          const handleBlur = () => finalizeRename(true);
+
+          renameInput.addEventListener("keydown", handleKeydown);
+          renameInput.addEventListener("blur", handleBlur);
+        }
+
+        function attachSheetRenameHandlers() {
+          if (!sheetTabsBarElement) {
+            return;
+          }
+
+          sheetTabsBarElement.addEventListener("dblclick", (event) => {
+            const potentialTab = event.target instanceof HTMLElement ? event.target.closest(".tab") : null;
+            if (!potentialTab || potentialTab.classList.contains("tab-add")) {
+              return;
+            }
+            event.preventDefault();
+            startSheetRename(potentialTab);
+          });
+        }
+
+        attachSheetRenameHandlers();
+        syncActiveSheetTabFromHyperFormula();
+          const SAMPLE_FAKE_DATA = [
+            ["Name", "Item", "Qty", "Price", "Date", "Code"],
+            ["Alice", "Item1", 10, 5.99, "2025-01-01", "INV-001"],
+            ["Bob", "Item2", 12, 7.49, "2025-01-08", "INV-002"],
+            ["Carol", "Item3", 14, 9.29, "2025-01-15", "INV-003"],
+            ["Dave", "Item4", 16, 12.5, "2025-01-22", "INV-004"],
+            ["Eve", "Item5", 18, 14.99, "2025-01-29", "INV-005"]
+          ];
 
           if (!gridBody) {
             console.error("gridBody not found - cannot build grid!");
@@ -266,6 +451,13 @@
           if (!gridHeaderElement) {
             console.error("gridHeader not found - cannot build grid!");
             return;
+          }
+          let selectionDragPreview = null;
+          if (gridWrapperInner) {
+            selectionDragPreview = document.createElement("div");
+            selectionDragPreview.id = "selectionDragPreview";
+            selectionDragPreview.className = "selection-drag-preview";
+            gridWrapperInner.appendChild(selectionDragPreview);
           }
 
           const chipColorPalette = (BASE_CHIP_COLORS || [])
@@ -288,7 +480,173 @@
           let isSelecting = false;
           let selectionStart = null;
           let selectionAnchorCell = null;
+          let selectionDragState = null;
           let isEditMode = false;
+          let suppressNextDocumentEnter = false;
+          const enterModePointerState = {
+            active: false,
+            pointerRow: null,
+            pointerCol: null,
+            anchorCellRef: null,
+            activeChipRange: null
+          };
+          const ENTER_MODE_POINTER_BREAK_REGEX = /[\s,+\-*/^()]/;
+          
+          function resetEnterModePointerState() {
+            enterModePointerState.active = false;
+            enterModePointerState.pointerRow = null;
+            enterModePointerState.pointerCol = null;
+            enterModePointerState.anchorCellRef = null;
+            enterModePointerState.activeChipRange = null;
+          }
+          
+          function initializeEnterModePointerState(cell) {
+            if (!cell) {
+              resetEnterModePointerState();
+              return;
+            }
+            const row = parseInt(cell.getAttribute("data-row"), 10);
+            const col = parseInt(cell.getAttribute("data-col"), 10);
+            if (Number.isNaN(row) || Number.isNaN(col)) {
+              resetEnterModePointerState();
+              return;
+            }
+            enterModePointerState.active = true;
+            enterModePointerState.pointerRow = row;
+            enterModePointerState.pointerCol = col;
+            enterModePointerState.anchorCellRef = cell.getAttribute("data-ref") || null;
+            enterModePointerState.activeChipRange = null;
+          }
+          
+          function alignPointerWithAnchorCell() {
+            const anchorCell = window.selectedCell || null;
+            if (anchorCell) {
+              initializeEnterModePointerState(anchorCell);
+            } else {
+              resetEnterModePointerState();
+            }
+          }
+          
+          function resetPointerAfterSeparatorIfNeeded(text = "") {
+            if (!text || !enterModePointerState.active) {
+              return;
+            }
+            const shouldReset = Array.from(text).some(char => ENTER_MODE_POINTER_BREAK_REGEX.test(char));
+            if (!shouldReset) {
+              return;
+            }
+            enterModePointerState.activeChipRange = null;
+            alignPointerWithAnchorCell();
+          }
+          
+          function updateEnterModePointerChipRange(range) {
+            if (!range) {
+              enterModePointerState.activeChipRange = null;
+              return;
+            }
+            enterModePointerState.activeChipRange = {
+              startLineNumber: range.startLineNumber,
+              startColumn: range.startColumn,
+              endLineNumber: range.endLineNumber,
+              endColumn: range.endColumn
+            };
+          }
+          
+          function isCursorWithinPointerChip(position) {
+            const stored = enterModePointerState.activeChipRange;
+            if (!stored || !position) {
+              return false;
+            }
+            if (position.lineNumber < stored.startLineNumber || position.lineNumber > stored.endLineNumber) {
+              return false;
+            }
+            if (position.lineNumber === stored.startLineNumber && position.column < stored.startColumn) {
+              return false;
+            }
+            if (position.lineNumber === stored.endLineNumber && position.column > stored.endColumn) {
+              return false;
+            }
+            return true;
+          }
+          
+          function getPointerChipRangeForPosition(position) {
+            if (!isCursorWithinPointerChip(position)) {
+              return null;
+            }
+            const stored = enterModePointerState.activeChipRange;
+            if (!stored || !window.monaco || !window.monaco.Range) {
+              return null;
+            }
+            return new window.monaco.Range(
+              stored.startLineNumber,
+              stored.startColumn,
+              stored.endLineNumber,
+              stored.endColumn
+            );
+          }
+          
+          function normalizeSingleCellReference(referenceText = '') {
+            if (!referenceText || typeof referenceText !== 'string') {
+              return null;
+            }
+            const trimmed = referenceText.trim();
+            if (!trimmed || trimmed.includes(':')) {
+              return null;
+            }
+            const bangIndex = trimmed.lastIndexOf('!');
+            const withoutSheet = bangIndex !== -1 ? trimmed.slice(bangIndex + 1) : trimmed;
+            if (!withoutSheet) {
+              return null;
+            }
+            return withoutSheet.replace(/\$/g, '');
+          }
+          
+          function updateEnterModePointerCoordinatesFromReference(reference) {
+            if (!enterModePointerState.active) {
+              return;
+            }
+            const normalized = normalizeSingleCellReference(reference);
+            if (!normalized) {
+              return;
+            }
+            const address = cellRefToAddress(normalized);
+            if (!address) {
+              return;
+            }
+            const [row, col] = address;
+            enterModePointerState.pointerRow = row;
+            enterModePointerState.pointerCol = col;
+          }
+          
+          function moveEnterModePointer(deltaRow = 0, deltaCol = 0) {
+            if (!enterModePointerState.active) {
+              initializeEnterModePointerState(window.selectedCell || null);
+            }
+            if (!enterModePointerState.active) {
+              return null;
+            }
+            const maxRow = typeof window.totalGridRows === 'number'
+              ? Math.max(0, window.totalGridRows - 1)
+              : (typeof enterModePointerState.pointerRow === 'number' ? enterModePointerState.pointerRow : 0);
+            const maxCol = typeof window.totalGridColumns === 'number'
+              ? Math.max(0, window.totalGridColumns - 1)
+              : (typeof enterModePointerState.pointerCol === 'number' ? enterModePointerState.pointerCol : 0);
+            const currentRow = typeof enterModePointerState.pointerRow === 'number' ? enterModePointerState.pointerRow : 0;
+            const currentCol = typeof enterModePointerState.pointerCol === 'number' ? enterModePointerState.pointerCol : 0;
+            const targetRow = Math.max(0, Math.min(maxRow, currentRow + deltaRow));
+            const targetCol = Math.max(0, Math.min(maxCol, currentCol + deltaCol));
+            enterModePointerState.pointerRow = targetRow;
+            enterModePointerState.pointerCol = targetCol;
+            const reference = addressToCellRef(targetRow, targetCol);
+            if (!reference) {
+              return null;
+            }
+            return {
+              reference,
+              row: targetRow,
+              col: targetCol
+            };
+          }
           const MODES = Object.freeze({
             READY: 'ready',
             ENTER: 'enter',
@@ -304,6 +662,26 @@
           const rangeChipElement = document.getElementById("cellRangeChip");
           let currentSelectionLabel = "";
           window.selectedCell = null;
+          const fillPreviewCells = new Set();
+          let fillHandleDragState = null;
+          const selectionOverlayElement = document.getElementById("selectionOverlay");
+          const selectionDragHandles = selectionOverlayElement ? selectionOverlayElement.querySelectorAll(".selection-border-handle") : [];
+          if (selectionDragHandles && selectionDragHandles.length > 0) {
+            selectionDragHandles.forEach(handle => {
+              handle.addEventListener("mousedown", (event) => {
+                if (event.button !== 0) {
+                  return;
+                }
+                if (isEditMode || isFormulaSelecting) {
+                  return;
+                }
+                if (!selectedCells || selectedCells.size === 0) {
+                  return;
+                }
+                startSelectionDrag(event);
+              });
+            });
+          }
 
           function getRowHeaderCell(rowIndex) {
             if (rowIndex === null || rowIndex === undefined) return null;
@@ -403,7 +781,7 @@
               modePrefixElement.textContent = metadata.prefix || "";
             }
             if (rangeChipElement) {
-              const label = currentSelectionLabel ? `(${currentSelectionLabel})` : `()`;
+              const label = currentSelectionLabel ?? "";
               rangeChipElement.textContent = label;
             }
           }
@@ -413,9 +791,18 @@
               console.warn("Unknown mode requested:", newMode);
               return;
             }
+            const previousMode = currentMode;
             currentMode = newMode;
             isEditMode = newMode !== MODES.READY;
+            const wasEditingMode = previousMode === MODES.ENTER || previousMode === MODES.EDIT;
+            const isEditingMode = newMode === MODES.ENTER || newMode === MODES.EDIT;
+            if (wasEditingMode && !isEditingMode) {
+              resetEnterModePointerState();
+            }
             updateModeIndicatorElements();
+            if (newMode === MODES.READY && typeof syncResultPaneWithSelection === "function") {
+              requestAnimationFrame(() => syncResultPaneWithSelection());
+            }
             const editorWrapper = document.querySelector('.editor-wrapper');
             if (editorWrapper) {
               if (newMode === MODES.EDIT) {
@@ -782,8 +1169,24 @@
             return cellChipColorAssignments.get(normalizedKey) || '';
           }
 
-          if (!chatInput || !chatMessages) {
-            console.warn("Chat elements not found, but continuing...");
+          function preserveChipColorAssignment(previousReference = '', newReference = '') {
+            if (!previousReference || !newReference) {
+              return;
+            }
+            const previousKey = getChipColorKey(previousReference.trim());
+            const newKey = getChipColorKey(newReference.trim());
+            if (!previousKey || !newKey || previousKey === newKey) {
+              return;
+            }
+            const existingClass = cellChipColorAssignments.get(previousKey);
+            if (!existingClass) {
+              return;
+            }
+            cellChipColorAssignments.set(newKey, existingClass);
+          }
+
+          if (!clappyTranscript || !clappyForm || !clappyInput) {
+            console.warn("Clappy elements not found, continuing without chat UI.");
           }
 
           // Initialize Monaco Editor (load asynchronously in background)
@@ -966,12 +1369,15 @@
                     hideCursorInOverviewRuler: true,
                     overviewRulerLanes: 0,
                     renderIndentGuides: false,
+                    selectionHighlight: false,
+                    occurrencesHighlight: false,
                     guides: {
                       indentation: false,
                       highlightActiveIndentation: false,
                       bracketPairsHorizontal: false,
                       highlightActiveBracketPair: false
                     },
+                    wordBasedSuggestions: false,
                     folding: true,
                     foldingStrategy: "indentation",
                     showFoldingControls: "always",
@@ -1277,6 +1683,36 @@
                           endLineNumber: position.lineNumber,
                           endColumn: position.column
                         });
+                        
+                        // Determine whether the cursor is currently inside an open string literal
+                        const textFromDocStart = model.getValueInRange({
+                          startLineNumber: 1,
+                          startColumn: 1,
+                          endLineNumber: position.lineNumber,
+                          endColumn: position.column
+                        });
+                        
+                        const isInsideStringLiteral = (() => {
+                          let inString = false;
+                          for (let i = 0; i < textFromDocStart.length; i++) {
+                            const char = textFromDocStart[i];
+                            if (char === '"') {
+                              const nextChar = textFromDocStart[i + 1];
+                              if (inString && nextChar === '"') {
+                                // Escaped double quote within a string (""), skip next char
+                                i++;
+                                continue;
+                              }
+                              inString = !inString;
+                            }
+                          }
+                          return inString;
+                        })();
+                        
+                        // Don't show IntelliSense suggestions while inside a string literal
+                        if (isInsideStringLiteral) {
+                          return { suggestions };
+                        }
                         
                         // Check if we're in a function call context for comma/parenthesis completion
                         const functionCallPattern = /\b([A-Za-z]+\w*)\s*\([^)]*$/i;
@@ -2407,6 +2843,261 @@
                         }
                       }
                     }
+
+                    const RESULT_PREVIEW_DELAY_MS = 900;
+                    const RESULT_PREVIEW_CELL = { row: 800, col: 800 };
+                    const CHIP_INSTANTIATION_SETTLE_MS = 150;
+                    const resultPaneElement = document.querySelector('.result-pane');
+                    const resultHeaderValueElement = document.getElementById('resultHeaderValue');
+                    let resultPreviewTimeout = null;
+                    let lastResultRenderedText = '';
+                    let lastResultRenderStatus = 'idle';
+                    let lastResultEvaluatedFormula = '';
+                    let formulaResultDirty = false;
+                    let chipInstantiationPending = false;
+                    let chipInstantiationSettleTimeout = null;
+                    let pendingResultPreviewMarkers = null;
+
+                    function getResultPaneElement() {
+                      return document.getElementById('resultContent');
+                    }
+
+                    function isHashErrorText(text) {
+                      if (!text) return false;
+                      return text.trim().startsWith('#');
+                    }
+
+                    function updateResultPaneDisplay(displayValue, status = 'idle') {
+                      const resultContainer = getResultPaneElement();
+                      if (!resultContainer) {
+                        return;
+                      }
+
+                      const normalizedValue = displayValue === null || displayValue === undefined
+                        ? ''
+                        : String(displayValue);
+
+                      if (normalizedValue === lastResultRenderedText && status === lastResultRenderStatus) {
+                        return;
+                      }
+
+                      const hashIndicatesError = isHashErrorText(normalizedValue);
+                      lastResultRenderedText = normalizedValue;
+                      lastResultRenderStatus = hashIndicatesError ? 'error' : status;
+
+                      if (!normalizedValue) {
+                        resultContainer.innerHTML = '<div class="result-placeholder">Result preview updates after changes without errors.</div>';
+                        updateResultHeaderValue();
+                        return;
+                      }
+
+                      const modifierClass = lastResultRenderStatus === 'error' ? 'result-output-error' : 'result-output-success';
+                      resultContainer.innerHTML = `
+                        <div class="result-output ${modifierClass}">
+                          <span class="result-label">Result</span>
+                          <span class="result-value">${escapeHtml(normalizedValue)}</span>
+                        </div>
+                      `;
+                      updateResultHeaderValue();
+                    }
+
+                    function updateResultHeaderValue() {
+                      if (!resultHeaderValueElement) {
+                        return;
+                      }
+                      if (lastResultRenderedText) {
+                        resultHeaderValueElement.textContent = lastResultRenderedText;
+                        resultHeaderValueElement.setAttribute('data-status', lastResultRenderStatus || 'idle');
+                      } else {
+                        resultHeaderValueElement.textContent = '';
+                        resultHeaderValueElement.removeAttribute('data-status');
+                      }
+                    }
+                    window.updateResultHeaderValue = updateResultHeaderValue;
+
+                    function getDisplayTextForCell(cell) {
+                      if (!cell) {
+                        return '';
+                      }
+                      const explicitDisplay = cell.getAttribute('data-display-text');
+                      if (explicitDisplay !== null && explicitDisplay !== undefined) {
+                        return explicitDisplay;
+                      }
+                      const textContent = cell.textContent;
+                      return textContent === null || textContent === undefined ? '' : textContent.trim();
+                    }
+
+                    function syncResultPaneWithSelection() {
+                      if (currentMode !== MODES.READY) {
+                        return;
+                      }
+                      const activeCell = window.selectedCell || null;
+                      if (!activeCell) {
+                        updateResultPaneDisplay('', 'idle');
+                        return;
+                      }
+                      const displayText = getDisplayTextForCell(activeCell);
+                      if (!displayText) {
+                        updateResultPaneDisplay('', 'idle');
+                        return;
+                      }
+                      updateResultPaneDisplay(displayText, 'success');
+                    }
+                    window.syncResultPaneWithSelection = syncResultPaneWithSelection;
+
+                    function cancelScheduledResultPreview() {
+                      if (resultPreviewTimeout) {
+                        clearTimeout(resultPreviewTimeout);
+                        resultPreviewTimeout = null;
+                      }
+                    }
+
+                    function markChipInstantiationStarted() {
+                      chipInstantiationPending = true;
+                      pendingResultPreviewMarkers = null;
+                      if (chipInstantiationSettleTimeout) {
+                        clearTimeout(chipInstantiationSettleTimeout);
+                        chipInstantiationSettleTimeout = null;
+                      }
+                      cancelScheduledResultPreview();
+                    }
+
+                    function scheduleChipInstantiationSettled() {
+                      if (!chipInstantiationPending) {
+                        pendingResultPreviewMarkers = null;
+                        return;
+                      }
+                      if (chipInstantiationSettleTimeout) {
+                        clearTimeout(chipInstantiationSettleTimeout);
+                      }
+                      chipInstantiationSettleTimeout = setTimeout(() => {
+                        chipInstantiationPending = false;
+                        chipInstantiationSettleTimeout = null;
+                        const queuedMarkers = pendingResultPreviewMarkers;
+                        pendingResultPreviewMarkers = null;
+                        if (queuedMarkers) {
+                          scheduleResultPreview(queuedMarkers);
+                        }
+                      }, CHIP_INSTANTIATION_SETTLE_MS);
+                    }
+
+                    function getFormulaTextForResultPreview() {
+                      const currentEditor = window.monacoEditor || editor;
+                      if (!currentEditor || typeof currentEditor.getValue !== 'function') {
+                        return '';
+                      }
+                      const normalized = stripComments(currentEditor.getValue() || '').trim();
+                      if (!normalized) {
+                        return '';
+                      }
+                      return normalized.startsWith('=') ? normalized : `=${normalized}`;
+                    }
+
+                    function interpretPreviewValue(rawValue) {
+                      if (rawValue === null || typeof rawValue === 'undefined') {
+                        return { status: 'success', value: '' };
+                      }
+
+                      if (Array.isArray(rawValue)) {
+                        const flattened = rawValue.map(item => {
+                          if (Array.isArray(item)) {
+                            return item.map(sub => (sub === null || sub === undefined) ? '' : String(sub)).join(', ');
+                          }
+                          return item === null || item === undefined ? '' : String(item);
+                        }).join(' ; ');
+                        return { status: 'success', value: flattened };
+                      }
+
+                      if (typeof rawValue === 'object') {
+                        const typeString = rawValue.type ? String(rawValue.type).toLowerCase() : '';
+                        const valuePortion = rawValue.value !== undefined
+                          ? rawValue.value
+                          : (rawValue.message !== undefined ? rawValue.message : '');
+                        const valueText = valuePortion === null || valuePortion === undefined
+                          ? ''
+                          : String(valuePortion);
+                        const isError = typeString.includes('error');
+                        if (isError) {
+                          return { status: 'error', value: valueText || '#ERROR!' };
+                        }
+                        if (valueText) {
+                          return { status: 'success', value: valueText };
+                        }
+                        return { status: 'success', value: JSON.stringify(rawValue) };
+                      }
+
+                      return { status: 'success', value: String(rawValue) };
+                    }
+
+                    function evaluateFormulaForPreview(formulaText) {
+                      if (!window.hf || !formulaText) {
+                        return { status: 'error', value: '#ERROR!' };
+                      }
+                      const sheetId = typeof window.hfSheetId === 'number' ? window.hfSheetId : 0;
+                      const previewAddress = {
+                        sheet: sheetId,
+                        row: RESULT_PREVIEW_CELL.row,
+                        col: RESULT_PREVIEW_CELL.col
+                      };
+                      try {
+                        window.hf.setCellContents(previewAddress, [[formulaText]]);
+                        const rawValue = window.hf.getCellValue(previewAddress);
+                        return interpretPreviewValue(rawValue);
+                      } catch (error) {
+                        console.error('Result preview evaluation failed:', error);
+                        return { status: 'error', value: '#ERROR!' };
+                      }
+                    }
+
+                    function runResultPreview(formulaText) {
+                      resultPreviewTimeout = null;
+                      const evaluation = evaluateFormulaForPreview(formulaText);
+                      lastResultEvaluatedFormula = formulaText;
+                      formulaResultDirty = false;
+                      updateResultPaneDisplay(evaluation.value, evaluation.status);
+                    }
+
+                    function scheduleResultPreview(markers) {
+                      if (currentMode === MODES.READY) {
+                        cancelScheduledResultPreview();
+                        lastResultEvaluatedFormula = '';
+                        formulaResultDirty = false;
+                        if (typeof syncResultPaneWithSelection === 'function') {
+                          syncResultPaneWithSelection();
+                        } else {
+                          updateResultPaneDisplay('', 'idle');
+                        }
+                        return;
+                      }
+                      if (chipInstantiationPending) {
+                        pendingResultPreviewMarkers = Array.isArray(markers) ? markers : (markers || []);
+                        return;
+                      }
+                      const hasErrors = Array.isArray(markers) && markers.some(marker => marker.severity === monaco.MarkerSeverity.Error);
+                      if (hasErrors) {
+                        cancelScheduledResultPreview();
+                        updateResultPaneDisplay('#ERROR!', 'error');
+                        return;
+                      }
+
+                      const formulaText = getFormulaTextForResultPreview();
+                      if (!formulaText) {
+                        cancelScheduledResultPreview();
+                        lastResultEvaluatedFormula = '';
+                        updateResultPaneDisplay('', 'idle');
+                        formulaResultDirty = false;
+                        return;
+                      }
+
+                      if (!formulaResultDirty && formulaText === lastResultEvaluatedFormula) {
+                        return;
+                      }
+
+                      cancelScheduledResultPreview();
+                      resultPreviewTimeout = setTimeout(() => {
+                        runResultPreview(formulaText);
+                      }, RESULT_PREVIEW_DELAY_MS);
+                    }
                     
                     // Use Monaco's markers API to set diagnostics
                     function validateFormula() {
@@ -2414,15 +3105,20 @@
                       if (!model) return;
                       
                       const diagnostics = diagnosticsProvider.provideDiagnostics(model, null);
-                      monaco.editor.setModelMarkers(model, 'formula-validator', diagnostics.markers);
+                      const markers = Array.isArray(diagnostics?.markers) ? diagnostics.markers : [];
+                      
+                      // Override Monaco markers to prevent text highlighting while keeping diagnostics data
+                      monaco.editor.setModelMarkers(model, 'formula-validator', []);
                       
                       // Update messages pane with diagnostics
-                      updateMessagesPane(diagnostics.markers);
+                      updateMessagesPane(markers);
+                      scheduleResultPreview(markers);
                     }
                     
                     // Validate on content change (with debounce for performance)
                     let validationTimeout;
                     editor.onDidChangeModelContent(() => {
+                      formulaResultDirty = true;
                       clearTimeout(validationTimeout);
                       validationTimeout = setTimeout(() => {
                         validateFormula();
@@ -2790,6 +3486,7 @@
                       
                       // Store the processed text to help prevent duplicates
                       lastProcessedText = fullText;
+                      scheduleChipInstantiationSettled();
                     }
 
                     function getChipRangeAtPosition(position) {
@@ -2811,16 +3508,23 @@
 
                     function replaceRangeWithChip(range, reference, options = {}) {
                       const currentEditor = window.monacoEditor || editor;
-                      if (!currentEditor || !reference) return;
+                      if (!currentEditor || !reference) return null;
                       const model = currentEditor.getModel();
-                      if (!model) return;
+                      if (!model) return null;
+
+            const previousValueInRange = model.getValueInRange(range) || '';
+            preserveChipColorAssignment(previousValueInRange, reference);
+
+                      markChipInstantiationStarted();
 
                       const lineContent = model.getLineContent(range.startLineNumber) || '';
                       const chipText = options.preservePadding
                         ? ` ${reference} `
                         : buildChipInsertionText(reference, lineContent, range.startColumn, range.endColumn);
 
+                      let newRange = null;
                       window.isProgrammaticCursorChange = true;
+                      try {
                       currentEditor.executeEdits('replace-chip', [{
                         range,
                         text: chipText,
@@ -2830,16 +3534,25 @@
                       const cursorOffset = chipText.endsWith(' ') ? 1 : 0;
                       const targetColumn = range.startColumn + chipText.length - cursorOffset;
                       currentEditor.setPosition(new monaco.Position(range.startLineNumber, Math.max(1, targetColumn)));
+                        newRange = new monaco.Range(
+                          range.startLineNumber,
+                          range.startColumn,
+                          range.startLineNumber,
+                          range.startColumn + Math.max(0, chipText.length)
+                        );
+                      } finally {
+                        window.isProgrammaticCursorChange = false;
+                      }
 
                       Promise.resolve().then(() => {
-                        window.isProgrammaticCursorChange = false;
                         updateCellChips();
                       });
+                      return newRange;
                     }
 
-                    function insertChipAtPosition(position, reference) {
+                    function insertChipAtPosition(position, reference, options = {}) {
                       const insertRange = new monaco.Range(position.lineNumber, position.column, position.lineNumber, position.column);
-                      replaceRangeWithChip(insertRange, reference);
+                      return replaceRangeWithChip(insertRange, reference, options);
                     }
 
                     function getTokenRangeAtPosition(model, position) {
@@ -2859,16 +3572,28 @@
                       const position = currentEditor.getPosition();
                       if (!position) return;
 
-                      const chipRange = getChipRangeAtPosition(position);
-                      if (chipRange) {
-                        replaceRangeWithChip(chipRange, reference, { preservePadding: true });
+                      let targetRange = getChipRangeAtPosition(position);
+                      if (!targetRange && currentMode === MODES.ENTER) {
+                        targetRange = getPointerChipRangeForPosition(position);
+                      }
+                      let appliedRange = null;
+
+                      if (targetRange) {
+                        appliedRange = replaceRangeWithChip(targetRange, reference, { preservePadding: true });
                       } else {
                         const tokenRange = getTokenRangeAtPosition(model, position);
                         if (tokenRange) {
-                          replaceRangeWithChip(tokenRange, reference);
+                          const tokenOptions = currentMode === MODES.ENTER ? { preservePadding: true } : undefined;
+                          appliedRange = replaceRangeWithChip(tokenRange, reference, tokenOptions);
                         } else {
-                          insertChipAtPosition(position, reference);
+                          const insertionOptions = currentMode === MODES.ENTER ? { preservePadding: true } : undefined;
+                          appliedRange = insertChipAtPosition(position, reference, insertionOptions);
                         }
+                      }
+
+                      if (currentMode === MODES.ENTER && appliedRange) {
+                        updateEnterModePointerChipRange(appliedRange);
+                        updateEnterModePointerCoordinatesFromReference(reference);
                       }
 
                       if (typeof currentEditor.focus === 'function') {
@@ -3065,6 +3790,9 @@
                       if (isEditMode) {
                         syncEditingCellDisplayWithPane(false, editor);
                       }
+                      if (e && e.position) {
+                        rememberFormulaCaretPosition(e.position);
+                      }
                       const inChip = isPositionInsideChip(e.position);
                       if (inChip === isCursorInChip) return;
                       isCursorInChip = inChip;
@@ -3097,18 +3825,63 @@
                       }
                     }
 
-                    function handleEnterKey() {
-                      const model = editor.getModel();
-                      if (!model) return;
-                      const selection = editor.getSelection();
-                      if (!selection) return;
+                    function rememberFormulaCaretPosition(position) {
+                      if (!position || typeof position.lineNumber !== 'number' || typeof position.column !== 'number') {
+                        return;
+                      }
+                      window.lastFormulaCaretPosition = {
+                        lineNumber: position.lineNumber,
+                        column: position.column
+                      };
+                    }
 
-                       closeSuggestionsIfOpen();
-                      
+                    function insertNewlineWithIndent() {
+                      const targetEditor = window.monacoEditor || editor;
+                      if (!targetEditor) return false;
+                      const model = targetEditor.getModel?.();
+                      if (!model) return false;
+                      let selection = typeof targetEditor.getSelection === 'function' ? targetEditor.getSelection() : null;
+                      if ((!selection || typeof selection.getPosition !== 'function') && typeof targetEditor.getPosition === 'function') {
+                        const fallbackPosition = targetEditor.getPosition() || window.lastFormulaCaretPosition;
+                        if (fallbackPosition) {
+                          selection = new monaco.Selection(
+                            fallbackPosition.lineNumber,
+                            fallbackPosition.column,
+                            fallbackPosition.lineNumber,
+                            fallbackPosition.column
+                          );
+                          rememberFormulaCaretPosition(fallbackPosition);
+                        }
+                      } else if (!selection || typeof selection.getPosition !== 'function') {
+                        const storedPosition = window.lastFormulaCaretPosition;
+                        if (storedPosition) {
+                          selection = new monaco.Selection(
+                            storedPosition.lineNumber,
+                            storedPosition.column,
+                            storedPosition.lineNumber,
+                            storedPosition.column
+                          );
+                        }
+                      }
+                      if (!selection || typeof selection.getPosition !== 'function') {
+                        return false;
+                      }
                       const position = selection.getPosition();
-                      if (!position) return;
+                      if (!position) return false;
                       
                       const lineNumber = position.lineNumber;
+                      const totalLines = model.getLineCount();
+
+                      // If there's already another line available, just move the caret
+                      if (lineNumber < totalLines) {
+                        const targetLine = lineNumber + 1;
+                        const nextLineMaxColumn = model.getLineMaxColumn(targetLine);
+                        const targetColumn = Math.min(position.column, nextLineMaxColumn);
+                        targetEditor.setPosition(new monaco.Position(targetLine, targetColumn));
+                        rememberFormulaCaretPosition({ lineNumber: targetLine, column: targetColumn });
+                        return true;
+                      }
+
                       const lineContent = model.getLineContent(lineNumber) || '';
                       
                       // Determine indentation to carry to next line (leading whitespace)
@@ -3123,7 +3896,7 @@
                       const insertText = '\n' + indent;
                       
                       window.isProgrammaticCursorChange = true;
-                      editor.executeEdits('custom-enter', [{
+                      targetEditor.executeEdits('custom-enter', [{
                         range: selection,
                         text: insertText,
                         forceMoveMarkers: true
@@ -3131,17 +3904,57 @@
                       
                       const targetLine = lineNumber + 1;
                       const targetColumn = indent.length + 1;
-                      editor.setPosition(new monaco.Position(targetLine, targetColumn));
+                      targetEditor.setPosition(new monaco.Position(targetLine, targetColumn));
+                      rememberFormulaCaretPosition({ lineNumber: targetLine, column: targetColumn });
                       
                       Promise.resolve().then(() => {
                         window.isProgrammaticCursorChange = false;
                       });
+                      return true;
+                    }
+                    window.insertFormulaPaneNewline = insertNewlineWithIndent;
+
+                    function handleEnterKey(e) {
+                      const model = editor.getModel();
+                      if (!model) return;
+                      const selection = editor.getSelection();
+                      if (!selection) return;
+
+                       closeSuggestionsIfOpen();
+                      
+                      const isModifierEnter = !!e && !e.altKey && (e.ctrlKey || e.metaKey);
+
+                      if ((currentMode === MODES.ENTER || currentMode === MODES.EDIT) && isModifierEnter) {
+                        const inserted = insertNewlineWithIndent();
+                        if (inserted) {
+                          const activeEditor = window.monacoEditor || editor;
+                          if (activeEditor && typeof activeEditor.focus === 'function') {
+                            activeEditor.focus();
+                          }
+                        }
+                        return;
+                      }
+
+                      if (currentMode === MODES.ENTER || currentMode === MODES.EDIT) {
+                        suppressNextDocumentEnter = true;
+                        const moveDelta = { row: e && e.shiftKey ? -1 : 1, col: 0 };
+                        const didCommit = commitEditorChanges(moveDelta);
+                        if (!didCommit) {
+                          const activeEditor = window.monacoEditor || editor;
+                          if (activeEditor && typeof activeEditor.focus === 'function') {
+                            activeEditor.focus();
+                          }
+                        }
+                        return;
+                      }
+
+                      insertNewlineWithIndent();
                     }
                     
                     editor.onKeyDown((e) => {
                       if (e.keyCode === monaco.KeyCode.Enter) {
                         e.preventDefault();
-                        handleEnterKey();
+                        handleEnterKey(e);
                       }
                     });
                     
@@ -3157,6 +3970,10 @@
                       if (window.isProgrammaticCursorChange) return;
                       const model = editor.getModel();
                       if (!model) return;
+
+                      if (currentMode === MODES.ENTER || currentMode === MODES.EDIT) {
+                        resetPointerAfterSeparatorIfNeeded(text);
+                      }
 
                       if (text === ':') {
                         const position = editor.getPosition();
@@ -3387,8 +4204,15 @@
                   });
                   
                   // Set up Ctrl+Enter command after editor is created
-                  // Ctrl+Enter commits the edit and returns to Ready mode without moving
                   editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, () => {
+                    if (currentMode === MODES.ENTER || currentMode === MODES.EDIT) {
+                      if (typeof insertNewlineWithIndent === 'function') {
+                        const inserted = insertNewlineWithIndent();
+                        if (inserted) {
+                      return;
+                        }
+                      }
+                    }
                     if (currentMode === MODES.READY) {
                       return;
                     }
@@ -3446,13 +4270,11 @@
             setMode(desiredMode);
             cancelFormulaSelection();
             
-            const overlay = document.getElementById("selectionOverlay");
-            if (overlay) {
-              overlay.style.display = "none";
+            if (selectionOverlayElement) {
+              selectionOverlayElement.style.display = "none";
             }
-            const fillHandle = document.getElementById("fillHandle");
-            if (fillHandle) {
-              fillHandle.style.display = "none";
+            if (fillHandleElement) {
+              fillHandleElement.style.display = "none";
             }
             
             clearSelection();
@@ -3461,6 +4283,11 @@
             cell.classList.add("edit-mode");
             cell.setAttribute("data-selection-edge", "top bottom left right");
             window.selectedCell = cell;
+            if (desiredMode === MODES.ENTER || desiredMode === MODES.EDIT) {
+              initializeEnterModePointerState(cell);
+            } else {
+              resetEnterModePointerState();
+            }
             updateCellRangePill();
             updateHeaderHighlightsFromSelection();
             
@@ -3848,6 +4675,38 @@
             return dependentCells;
           }
           
+          function normalizeValueForCell(rawValue) {
+            if (rawValue === null || rawValue === undefined) {
+              return "";
+            }
+            
+            if (typeof rawValue === "number") {
+              if (!Number.isFinite(rawValue)) {
+                return "";
+              }
+              return rawValue.toString();
+            }
+            
+            if (typeof rawValue === "boolean") {
+              return rawValue ? "TRUE" : "FALSE";
+            }
+            
+            if (rawValue instanceof Date) {
+              const iso = rawValue.toISOString().split('T')[0];
+              const escapedDate = iso.replace(/"/g, '""');
+              return `="${escapedDate}"`;
+            }
+            
+            const stringValue = rawValue.toString();
+            const trimmedForFormulaCheck = stringValue.trimStart();
+            if (trimmedForFormulaCheck.startsWith("=")) {
+              return trimmedForFormulaCheck;
+            }
+            
+            const escapedValue = stringValue.replace(/"/g, '""');
+            return `="${escapedValue}"`;
+          }
+          
           // Function to set cell value in HyperFormula and update display
           function setCellValue(cellRef, value) {
             if (!window.hf) {
@@ -3937,6 +4796,430 @@
             }
           }
 
+          function getSelectionBounds() {
+            if (!selectedCells || selectedCells.size === 0) {
+              return null;
+            }
+            let minRow = Number.POSITIVE_INFINITY;
+            let maxRow = Number.NEGATIVE_INFINITY;
+            let minCol = Number.POSITIVE_INFINITY;
+            let maxCol = Number.NEGATIVE_INFINITY;
+            selectedCells.forEach((cell) => {
+              const rowAttr = cell.getAttribute("data-row");
+              const colAttr = cell.getAttribute("data-col");
+              if (rowAttr === null || colAttr === null) {
+                return;
+              }
+              const row = parseInt(rowAttr, 10);
+              const col = parseInt(colAttr, 10);
+              if (Number.isNaN(row) || Number.isNaN(col)) {
+                return;
+              }
+              minRow = Math.min(minRow, row);
+              maxRow = Math.max(maxRow, row);
+              minCol = Math.min(minCol, col);
+              maxCol = Math.max(maxCol, col);
+            });
+            if (!Number.isFinite(minRow) || !Number.isFinite(minCol)) {
+              return null;
+            }
+            return {
+              minRow,
+              maxRow,
+              minCol,
+              maxCol,
+              height: maxRow - minRow + 1,
+              width: maxCol - minCol + 1
+            };
+          }
+
+          function clearSelectedCellContents() {
+            if (!selectedCells || selectedCells.size === 0) {
+              return false;
+            }
+            let clearedAny = false;
+            selectedCells.forEach((cell) => {
+              const cellRef = cell.getAttribute("data-ref");
+              if (cellRef) {
+                setCellValue(cellRef, "");
+                cell.removeAttribute("data-formula");
+                clearedAny = true;
+              }
+            });
+            if (clearedAny && typeof updateCellChips === "function") {
+              requestAnimationFrame(() => updateCellChips());
+            }
+            return clearedAny;
+          }
+
+          function wrapIndex(value, size) {
+            if (!size || size <= 0) {
+              return 0;
+            }
+            const remainder = value % size;
+            return remainder < 0 ? remainder + size : remainder;
+          }
+
+          function clearFillPreview() {
+            if (!fillPreviewCells) {
+              return;
+            }
+            fillPreviewCells.forEach((cell) => cell.classList.remove("fill-preview"));
+            fillPreviewCells.clear();
+          }
+
+          function updateFillPreview(range) {
+            clearFillPreview();
+            if (!range) {
+              return;
+            }
+            const minRow = Math.min(range.minRow ?? range.maxRow ?? 0, range.maxRow ?? range.minRow ?? 0);
+            const maxRow = Math.max(range.minRow ?? range.maxRow ?? 0, range.maxRow ?? range.minRow ?? 0);
+            const minCol = Math.min(range.minCol ?? range.maxCol ?? 0, range.maxCol ?? range.minCol ?? 0);
+            const maxCol = Math.max(range.minCol ?? range.maxCol ?? 0, range.maxCol ?? range.minCol ?? 0);
+            for (let row = minRow; row <= maxRow; row++) {
+              for (let col = minCol; col <= maxCol; col++) {
+                const cell = gridBody.querySelector(`tr[data-row="${row}"] td[data-col="${col}"]`);
+                if (cell) {
+                  cell.classList.add("fill-preview");
+                  fillPreviewCells.add(cell);
+                }
+              }
+            }
+          }
+
+          function getCellDataSnapshot(row, col) {
+            const cell = gridBody.querySelector(`tr[data-row="${row}"] td[data-col="${col}"]`);
+            if (!cell) {
+              return { raw: "", isFormula: false };
+            }
+            let rawValue = cell.getAttribute("data-formula");
+            if (rawValue === null || rawValue === undefined) {
+              const cellRef = cell.getAttribute("data-ref");
+              if (cellRef) {
+                const currentValue = getCellValue(cellRef);
+                rawValue = currentValue !== null && currentValue !== undefined ? currentValue.toString() : "";
+              } else {
+                rawValue = "";
+              }
+            }
+            let normalized = typeof rawValue === "string" ? rawValue : (rawValue ?? "").toString();
+            if (!normalized) {
+              const cellRef = cell.getAttribute("data-ref");
+              if (cellRef && window.hf) {
+                const address = cellRefToAddress(cellRef);
+                if (address) {
+                  const [cellRow, cellCol] = address;
+                  try {
+                    const sheetId = typeof window.hfSheetId === "number" ? window.hfSheetId : 0;
+                    const hfFormula = window.hf.getCellFormula({ col: cellCol, row: cellRow, sheet: sheetId });
+                    if (hfFormula) {
+                      normalized = hfFormula;
+                    }
+                  } catch (formulaError) {
+                    // Ignore if formula lookup fails
+                  }
+                }
+              }
+            }
+            let isFormulaCell = typeof normalized === "string" && normalized.startsWith("=");
+            return {
+              raw: normalized,
+              isFormula: isFormulaCell
+            };
+          }
+
+          function determineFillTarget(bounds, pointerRow, pointerCol, lockedAxis) {
+            if (!bounds) {
+              return null;
+            }
+            let axis = lockedAxis || null;
+            if (axis === null) {
+              if (pointerRow < bounds.minRow || pointerRow > bounds.maxRow) {
+                axis = "vertical";
+              } else if (pointerCol < bounds.minCol || pointerCol > bounds.maxCol) {
+                axis = "horizontal";
+              }
+            }
+            if (!axis) {
+              return null;
+            }
+            if (axis === "vertical") {
+              if (pointerRow > bounds.maxRow) {
+                return {
+                  axis: "vertical",
+                  direction: "down",
+                  minRow: bounds.maxRow + 1,
+                  maxRow: pointerRow,
+                  minCol: bounds.minCol,
+                  maxCol: bounds.maxCol
+                };
+              }
+              if (pointerRow < bounds.minRow) {
+                return {
+                  axis: "vertical",
+                  direction: "up",
+                  minRow: pointerRow,
+                  maxRow: bounds.minRow - 1,
+                  minCol: bounds.minCol,
+                  maxCol: bounds.maxCol
+                };
+              }
+            } else if (axis === "horizontal") {
+              if (pointerCol > bounds.maxCol) {
+                return {
+                  axis: "horizontal",
+                  direction: "right",
+                  minCol: bounds.maxCol + 1,
+                  maxCol: pointerCol,
+                  minRow: bounds.minRow,
+                  maxRow: bounds.maxRow
+                };
+              }
+              if (pointerCol < bounds.minCol) {
+                return {
+                  axis: "horizontal",
+                  direction: "left",
+                  minCol: pointerCol,
+                  maxCol: bounds.minCol - 1,
+                  minRow: bounds.minRow,
+                  maxRow: bounds.maxRow
+                };
+              }
+            }
+            return null;
+          }
+
+          function buildRange(start, end, step) {
+            const values = [];
+            if (step > 0) {
+              for (let value = start; value <= end; value += step) {
+                values.push(value);
+              }
+            } else if (step < 0) {
+              for (let value = start; value >= end; value += step) {
+                values.push(value);
+              }
+            }
+            return values;
+          }
+
+          function applyAutofillFromSelection(bounds, targetRange) {
+            if (!bounds || !targetRange) {
+              return;
+            }
+            if (targetRange.axis === "vertical") {
+              applyVerticalAutofill(bounds, targetRange);
+            } else if (targetRange.axis === "horizontal") {
+              applyHorizontalAutofill(bounds, targetRange);
+            }
+          }
+
+          function applyVerticalAutofill(bounds, targetRange) {
+            const targetRows = targetRange.direction === "down"
+              ? buildRange(targetRange.minRow, targetRange.maxRow, 1)
+              : buildRange(targetRange.maxRow, targetRange.minRow, -1);
+            if (targetRows.length === 0) {
+              return;
+            }
+            const fillDirection = targetRange.direction === "down"
+              ? AutofillDirection.FORWARD
+              : AutofillDirection.BACKWARD;
+            for (let col = bounds.minCol; col <= bounds.maxCol; col++) {
+              const seeds = [];
+              for (let row = bounds.minRow; row <= bounds.maxRow; row++) {
+                seeds.push(getCellDataSnapshot(row, col));
+              }
+              const allValues = seeds.every((entry) => !entry.isFormula);
+              if (allValues) {
+                const rawSeeds = seeds.map((entry) => entry.raw ?? "");
+                const fillValues = generateValueFill(rawSeeds, targetRows.length, { direction: fillDirection });
+                targetRows.forEach((targetRow, index) => {
+                  const valueToSet = fillValues[index] ?? "";
+                  const targetRef = addressToCellRef(targetRow, col);
+                  setCellValue(targetRef, valueToSet);
+                });
+              } else {
+                targetRows.forEach((targetRow) => {
+                  const relativeIndex = wrapIndex(targetRow - bounds.minRow, seeds.length);
+                  const sourceRow = bounds.minRow + relativeIndex;
+                  const seed = seeds[relativeIndex] || { raw: "", isFormula: false };
+                  let nextValue = seed.raw ?? "";
+                  if (seed.isFormula) {
+                    const rowDelta = targetRow - sourceRow;
+                    nextValue = adjustFormulaReferences(nextValue, rowDelta, 0);
+                  }
+                  const targetRef = addressToCellRef(targetRow, col);
+                  setCellValue(targetRef, nextValue);
+                });
+              }
+            }
+            const newMinRow = Math.min(bounds.minRow, targetRange.minRow);
+            const newMaxRow = Math.max(bounds.maxRow, targetRange.maxRow);
+            const startCell = gridBody.querySelector(`tr[data-row="${newMinRow}"] td[data-col="${bounds.minCol}"]`);
+            const endCell = gridBody.querySelector(`tr[data-row="${newMaxRow}"] td[data-col="${bounds.maxCol}"]`);
+            if (startCell && endCell) {
+              selectRange(startCell, endCell);
+            }
+          }
+
+          function applyHorizontalAutofill(bounds, targetRange) {
+            const targetCols = targetRange.direction === "right"
+              ? buildRange(targetRange.minCol, targetRange.maxCol, 1)
+              : buildRange(targetRange.maxCol, targetRange.minCol, -1);
+            if (targetCols.length === 0) {
+              return;
+            }
+            const fillDirection = targetRange.direction === "right"
+              ? AutofillDirection.FORWARD
+              : AutofillDirection.BACKWARD;
+            for (let row = bounds.minRow; row <= bounds.maxRow; row++) {
+              const seeds = [];
+              for (let col = bounds.minCol; col <= bounds.maxCol; col++) {
+                seeds.push(getCellDataSnapshot(row, col));
+              }
+              const allValues = seeds.every((entry) => !entry.isFormula);
+              if (allValues) {
+                const rawSeeds = seeds.map((entry) => entry.raw ?? "");
+                const fillValues = generateValueFill(rawSeeds, targetCols.length, { direction: fillDirection });
+                targetCols.forEach((targetCol, index) => {
+                  const valueToSet = fillValues[index] ?? "";
+                  const targetRef = addressToCellRef(row, targetCol);
+                  setCellValue(targetRef, valueToSet);
+                });
+              } else {
+                targetCols.forEach((targetCol) => {
+                  const relativeIndex = wrapIndex(targetCol - bounds.minCol, seeds.length);
+                  const sourceCol = bounds.minCol + relativeIndex;
+                  const seed = seeds[relativeIndex] || { raw: "", isFormula: false };
+                  let nextValue = seed.raw ?? "";
+                  if (seed.isFormula) {
+                    const colDelta = targetCol - sourceCol;
+                    nextValue = adjustFormulaReferences(nextValue, 0, colDelta);
+                  }
+                  const targetRef = addressToCellRef(row, targetCol);
+                  setCellValue(targetRef, nextValue);
+                });
+              }
+            }
+            const newMinCol = Math.min(bounds.minCol, targetRange.minCol);
+            const newMaxCol = Math.max(bounds.maxCol, targetRange.maxCol);
+            const startCell = gridBody.querySelector(`tr[data-row="${bounds.minRow}"] td[data-col="${newMinCol}"]`);
+            const endCell = gridBody.querySelector(`tr[data-row="${bounds.maxRow}"] td[data-col="${newMaxCol}"]`);
+            if (startCell && endCell) {
+              selectRange(startCell, endCell);
+            }
+          }
+
+          function handleFillHandleMouseDown(event) {
+            if (event.button !== 0) {
+              return;
+            }
+            if (isEditMode || isFormulaSelecting) {
+              return;
+            }
+            const bounds = getSelectionBounds();
+            if (!bounds) {
+              return;
+            }
+            event.preventDefault();
+            event.stopPropagation();
+            fillHandleDragState = {
+              bounds,
+              axis: null,
+              targetRange: null
+            };
+            document.body.style.userSelect = "none";
+            document.addEventListener("mousemove", handleFillHandleMouseMove);
+            document.addEventListener("mouseup", handleFillHandleMouseUp);
+          }
+
+          function handleFillHandleMouseMove(event) {
+            if (!fillHandleDragState) {
+              return;
+            }
+            const cell = getCellElementFromPoint(event.clientX, event.clientY);
+            if (!cell) {
+              fillHandleDragState.targetRange = null;
+              updateFillPreview(null);
+              return;
+            }
+            const row = parseInt(cell.getAttribute("data-row"), 10);
+            const col = parseInt(cell.getAttribute("data-col"), 10);
+            if (Number.isNaN(row) || Number.isNaN(col)) {
+              fillHandleDragState.targetRange = null;
+              updateFillPreview(null);
+              return;
+            }
+            const nextRange = determineFillTarget(fillHandleDragState.bounds, row, col, fillHandleDragState.axis);
+            if (nextRange && !fillHandleDragState.axis) {
+              fillHandleDragState.axis = nextRange.axis;
+            }
+            fillHandleDragState.targetRange = nextRange;
+            updateFillPreview(nextRange);
+          }
+
+          function handleFillHandleMouseUp() {
+            if (!fillHandleDragState) {
+              return;
+            }
+            document.removeEventListener("mousemove", handleFillHandleMouseMove);
+            document.removeEventListener("mouseup", handleFillHandleMouseUp);
+            document.body.style.userSelect = "";
+            const { bounds, targetRange } = fillHandleDragState;
+            fillHandleDragState = null;
+            clearFillPreview();
+            if (targetRange) {
+              applyAutofillFromSelection(bounds, targetRange);
+            }
+          }
+
+          function getCellElementFromPoint(x, y) {
+            const element = document.elementFromPoint(x, y);
+            if (!element) {
+              return null;
+            }
+            const cell = element.closest('td[data-row][data-col]');
+            if (!cell || !gridBody.contains(cell)) {
+              return null;
+            }
+            return cell;
+          }
+
+          if (fillHandleElement) {
+            fillHandleElement.addEventListener("mousedown", handleFillHandleMouseDown);
+          }
+
+          function populateGridWithData(dataRows, startRef = "A1") {
+            if (!window.hf) {
+              console.warn("HyperFormula not initialized - skipping data population");
+              return;
+            }
+            if (!Array.isArray(dataRows) || dataRows.length === 0) {
+              return;
+            }
+            
+            const startAddress = cellRefToAddress(startRef);
+            if (!startAddress) {
+              console.warn("Invalid start reference for data population:", startRef);
+              return;
+            }
+            
+            const [startRow, startCol] = startAddress;
+            
+            dataRows.forEach((rowValues, rowIndex) => {
+              if (!Array.isArray(rowValues)) {
+                return;
+              }
+              
+              rowValues.forEach((rawValue, colIndex) => {
+                const targetRef = addressToCellRef(startRow + rowIndex, startCol + colIndex);
+                const normalizedValue = normalizeValueForCell(rawValue);
+                setCellValue(targetRef, normalizedValue);
+              });
+            });
+          }
+
           // Function to get cell reference from row and col (0-indexed)
           function getCellReference(row, col) {
             return addressToCellRef(row, col);
@@ -3982,6 +5265,7 @@
             });
             selectedCells.clear();
             selectionAnchorCell = null;
+            clearFillPreview();
             
             // Remove edit-mode class from editor-wrapper when clearing selection
             if (currentMode !== MODES.EDIT) {
@@ -3992,23 +5276,24 @@
             }
             
             // Hide selection overlay and fill handle
-            const overlay = document.getElementById("selectionOverlay");
-            if (overlay) {
-              overlay.style.display = "none";
+            if (selectionOverlayElement) {
+              selectionOverlayElement.style.display = "none";
             }
-            const fillHandle = document.getElementById("fillHandle");
-            if (fillHandle) {
-              fillHandle.style.display = "none";
+            if (fillHandleElement) {
+              fillHandleElement.style.display = "none";
             }
             clearHeaderHighlights();
           }
           
           // Function to update the selection overlay rectangle
           function updateSelectionOverlay() {
-            const overlay = document.getElementById("selectionOverlay");
+            const overlay = selectionOverlayElement;
             // Hide overlay if in edit mode or no cells selected
             if (!overlay || selectedCells.size === 0 || isEditMode) {
               if (overlay) overlay.style.display = "none";
+              if (fillHandleElement) {
+                fillHandleElement.style.display = "none";
+              }
               return;
             }
             
@@ -4020,7 +5305,6 @@
             }
             
             // Get the grid wrapper inner (scrollable container)
-            const gridWrapperInner = document.getElementById("gridWrapperInner");
             if (!gridWrapperInner) return;
             
             // Get bounding rectangles
@@ -4051,9 +5335,369 @@
             overlay.style.display = "block";
             
             // Show fill handle
-            const fillHandle = document.getElementById("fillHandle");
-            if (fillHandle) {
-              fillHandle.style.display = "block";
+            if (fillHandleElement) {
+              fillHandleElement.style.display = "block";
+            }
+          }
+
+          function getSelectionBoundsInfo() {
+            if (!selectedCells || selectedCells.size === 0) {
+              return null;
+            }
+            const rows = [];
+            const cols = [];
+            selectedCells.forEach(cell => {
+              const rowAttr = cell.getAttribute("data-row");
+              const colAttr = cell.getAttribute("data-col");
+              const rowValue = rowAttr !== null ? parseInt(rowAttr, 10) : NaN;
+              const colValue = colAttr !== null ? parseInt(colAttr, 10) : NaN;
+              if (!Number.isNaN(rowValue)) {
+                rows.push(rowValue);
+              }
+              if (!Number.isNaN(colValue)) {
+                cols.push(colValue);
+              }
+            });
+            if (rows.length === 0 || cols.length === 0) {
+              return null;
+            }
+            const minRow = Math.min(...rows);
+            const maxRow = Math.max(...rows);
+            const minCol = Math.min(...cols);
+            const maxCol = Math.max(...cols);
+            return {
+              minRow,
+              maxRow,
+              minCol,
+              maxCol,
+              rowCount: maxRow - minRow + 1,
+              colCount: maxCol - minCol + 1
+            };
+          }
+
+          function getCellFromViewportPoint(clientX, clientY) {
+            const element = document.elementFromPoint(clientX, clientY);
+            if (!element) {
+              return null;
+            }
+            return element.closest('#gridBody td[data-row]');
+          }
+
+          function positionElementForBounds(element, bounds) {
+            if (!element || !bounds || !gridWrapperInner) {
+              return;
+            }
+            const topLeftCell = gridBody.querySelector(`tr[data-row="${bounds.minRow}"] td[data-col="${bounds.minCol}"]`);
+            const bottomRightCell = gridBody.querySelector(`tr[data-row="${bounds.maxRow}"] td[data-col="${bounds.maxCol}"]`);
+            if (!topLeftCell || !bottomRightCell) {
+              element.style.display = "none";
+              return;
+            }
+            const gridRect = gridWrapperInner.getBoundingClientRect();
+            const topLeftRect = topLeftCell.getBoundingClientRect();
+            const bottomRightRect = bottomRightCell.getBoundingClientRect();
+            const left = topLeftRect.left - gridRect.left + gridWrapperInner.scrollLeft;
+            const top = topLeftRect.top - gridRect.top + gridWrapperInner.scrollTop;
+            const width = bottomRightRect.right - topLeftRect.left;
+            const height = bottomRightRect.bottom - topLeftRect.top;
+            element.style.left = `${left}px`;
+            element.style.top = `${top}px`;
+            element.style.width = `${width}px`;
+            element.style.height = `${height}px`;
+            element.style.display = "block";
+          }
+
+          function showSelectionDragPreview(bounds) {
+            if (!selectionDragPreview) {
+              return;
+            }
+            positionElementForBounds(selectionDragPreview, bounds);
+          }
+
+          function hideSelectionDragPreview() {
+            if (selectionDragPreview) {
+              selectionDragPreview.style.display = "none";
+            }
+          }
+
+          function startSelectionDrag(event) {
+            if (selectionDragState) {
+              return;
+            }
+            const bounds = getSelectionBoundsInfo();
+            if (!bounds) {
+              return;
+            }
+            selectionDragState = {
+              bounds,
+              rowOffset: 0,
+              colOffset: 0,
+              dropTarget: null,
+              overlayPointerEvents: selectionOverlayElement ? selectionOverlayElement.style.pointerEvents : ""
+            };
+            if (selectionOverlayElement) {
+              selectionOverlayElement.style.pointerEvents = "none";
+            }
+            const startCell = getCellFromViewportPoint(event.clientX, event.clientY);
+            if (startCell) {
+              const startRow = parseInt(startCell.getAttribute("data-row"), 10);
+              const startCol = parseInt(startCell.getAttribute("data-col"), 10);
+              if (!Number.isNaN(startRow) && !Number.isNaN(startCol)) {
+                selectionDragState.rowOffset = startRow - bounds.minRow;
+                selectionDragState.colOffset = startCol - bounds.minCol;
+              }
+            }
+            document.body.style.userSelect = "none";
+            document.body.style.cursor = "grabbing";
+            showSelectionDragPreview(bounds);
+            document.addEventListener("mousemove", handleSelectionDragMove);
+            document.addEventListener("mouseup", handleSelectionDragEnd);
+            event.preventDefault();
+            event.stopPropagation();
+          }
+
+          function handleSelectionDragMove(event) {
+            if (!selectionDragState) {
+              return;
+            }
+            const hoverCell = getCellFromViewportPoint(event.clientX, event.clientY);
+            if (!hoverCell) {
+              selectionDragState.dropTarget = null;
+              hideSelectionDragPreview();
+              return;
+            }
+            const hoverRow = parseInt(hoverCell.getAttribute("data-row"), 10);
+            const hoverCol = parseInt(hoverCell.getAttribute("data-col"), 10);
+            if (Number.isNaN(hoverRow) || Number.isNaN(hoverCol)) {
+              selectionDragState.dropTarget = null;
+              hideSelectionDragPreview();
+              return;
+            }
+            const state = selectionDragState;
+            const rowCount = state.bounds.rowCount;
+            const colCount = state.bounds.colCount;
+            const maxRowStart = typeof window.totalGridRows === 'number' ? Math.max(0, window.totalGridRows - rowCount) : null;
+            const maxColStart = typeof window.totalGridColumns === 'number' ? Math.max(0, window.totalGridColumns - colCount) : null;
+            let targetRow = hoverRow - state.rowOffset;
+            let targetCol = hoverCol - state.colOffset;
+            if (maxRowStart !== null && !Number.isNaN(maxRowStart)) {
+              targetRow = Math.min(Math.max(0, targetRow), maxRowStart);
+            } else {
+              targetRow = Math.max(0, targetRow);
+            }
+            if (maxColStart !== null && !Number.isNaN(maxColStart)) {
+              targetCol = Math.min(Math.max(0, targetCol), maxColStart);
+            } else {
+              targetCol = Math.max(0, targetCol);
+            }
+            state.dropTarget = { row: targetRow, col: targetCol };
+            const previewBounds = {
+              minRow: targetRow,
+              maxRow: targetRow + rowCount - 1,
+              minCol: targetCol,
+              maxCol: targetCol + colCount - 1,
+              rowCount,
+              colCount
+            };
+            showSelectionDragPreview(previewBounds);
+          }
+
+          function handleSelectionDragEnd() {
+            if (!selectionDragState) {
+              return;
+            }
+            document.removeEventListener("mousemove", handleSelectionDragMove);
+            document.removeEventListener("mouseup", handleSelectionDragEnd);
+            document.body.style.userSelect = "";
+            document.body.style.cursor = "";
+            if (selectionOverlayElement) {
+              selectionOverlayElement.style.pointerEvents = selectionDragState.overlayPointerEvents || "";
+            }
+            hideSelectionDragPreview();
+            const { bounds, dropTarget } = selectionDragState;
+            selectionDragState = null;
+            if (!dropTarget) {
+              return;
+            }
+            if (dropTarget.row === bounds.minRow && dropTarget.col === bounds.minCol) {
+              return;
+            }
+            applySelectionMove(bounds, dropTarget);
+          }
+
+          function applySelectionMove(sourceBounds, targetStart) {
+            if (!window.hf) {
+              console.warn("HyperFormula not initialized");
+              return;
+            }
+            const sheetId = window.hfSheetId !== undefined ? window.hfSheetId : 0;
+            const sourceRange = {
+              start: { sheet: sheetId, row: sourceBounds.minRow, col: sourceBounds.minCol },
+              end: { sheet: sheetId, row: sourceBounds.maxRow, col: sourceBounds.maxCol }
+            };
+            const destinationAddress = { sheet: sheetId, row: targetStart.row, col: targetStart.col };
+            try {
+              const isAllowed = typeof window.hf.isItPossibleToMoveCells === 'function'
+                ? window.hf.isItPossibleToMoveCells(sourceRange, destinationAddress)
+                : true;
+              if (!isAllowed) {
+                console.warn("HyperFormula reported moveCells operation is not allowed for the requested range.");
+                return;
+              }
+              window.hf.moveCells(sourceRange, destinationAddress);
+            } catch (error) {
+              console.error("Failed to move selection via HyperFormula:", error);
+              return;
+            }
+            const targetBounds = {
+              minRow: targetStart.row,
+              maxRow: targetStart.row + sourceBounds.rowCount - 1,
+              minCol: targetStart.col,
+              maxCol: targetStart.col + sourceBounds.colCount - 1,
+              rowCount: sourceBounds.rowCount,
+              colCount: sourceBounds.colCount
+            };
+            updateDisplaysForRanges([sourceBounds, targetBounds]);
+            const startCell = gridBody.querySelector(`tr[data-row="${targetBounds.minRow}"] td[data-col="${targetBounds.minCol}"]`);
+            const endCell = gridBody.querySelector(`tr[data-row="${targetBounds.maxRow}"] td[data-col="${targetBounds.maxCol}"]`);
+            if (startCell && endCell) {
+              selectRange(startCell, endCell);
+            } else {
+              updateSelectionOverlay();
+              updateCellRangePill();
+            }
+          }
+
+          function updateDisplaysForRanges(boundsList) {
+            if (!Array.isArray(boundsList) || boundsList.length === 0) {
+              return;
+            }
+            const refsToUpdate = new Set();
+            const sheetId = window.hfSheetId !== undefined ? window.hfSheetId : 0;
+            boundsList.forEach(bounds => {
+              if (!bounds) {
+                return;
+              }
+              for (let row = bounds.minRow; row <= bounds.maxRow; row++) {
+                for (let col = bounds.minCol; col <= bounds.maxCol; col++) {
+                  const ref = addressToCellRef(row, col);
+                  if (ref) {
+                    refsToUpdate.add(ref);
+                  }
+                  const dependents = getDependentCells(row, col, sheetId);
+                  if (Array.isArray(dependents)) {
+                    dependents.forEach(dep => {
+                      if (dep && dep.ref) {
+                        refsToUpdate.add(dep.ref);
+                      }
+                    });
+                  }
+                }
+              }
+            });
+            refsToUpdate.forEach(ref => updateCellDisplay(ref));
+          }
+
+          function refreshCellsFromChanges(changes) {
+            if (!Array.isArray(changes) || changes.length === 0) {
+              return;
+            }
+            const refsToUpdate = new Set();
+            changes.forEach(change => {
+              if (!change || !change.address) {
+                return;
+              }
+              const { row, col } = change.address;
+              const ref = addressToCellRef(row, col);
+              if (ref) {
+                refsToUpdate.add(ref);
+              }
+            });
+            refsToUpdate.forEach(ref => updateCellDisplay(ref));
+          }
+
+          function refreshFormulaEditorFromSelection() {
+            if (!window.selectedCell) {
+              return;
+            }
+            const currentEditor = window.monacoEditor || editor;
+            if (!currentEditor || typeof currentEditor.setValue !== 'function') {
+              return;
+            }
+            const cell = window.selectedCell;
+            const isHeader = cell.tagName === "TH" || cell === cell.parentElement.querySelector("td:first-child");
+            let editorValue = "";
+            if (!isHeader) {
+              editorValue = getStoredFormulaText(cell) || "";
+              if (!editorValue && window.hf) {
+                const cellRef = cell.getAttribute("data-ref");
+                const address = cellRef ? cellRefToAddress(cellRef) : null;
+                if (address) {
+                  const [row, col] = address;
+                  const sheetId = window.hfSheetId !== undefined ? window.hfSheetId : 0;
+                  try {
+                    const cellFormula = window.hf.getCellFormula({ col, row, sheet: sheetId });
+                    if (cellFormula) {
+                      editorValue = cellFormula.startsWith("=") ? cellFormula.substring(1) : cellFormula;
+                      cell.setAttribute("data-formula", cellFormula);
+                    } else {
+                      const cellValue = window.hf.getCellValue({ col, row, sheet: sheetId });
+                      if (cellValue !== null && cellValue !== undefined) {
+                        editorValue = cellValue.toString();
+                        cell.setAttribute("data-formula", editorValue);
+                      } else {
+                        cell.removeAttribute("data-formula");
+                      }
+                    }
+                  } catch (error) {
+                    console.error("Failed to refresh editor snapshot:", error);
+                  }
+                }
+              }
+            }
+            const fullValue = ensureSevenLines(editorValue || "");
+            const firstLine = (editorValue || "").split('\n')[0] || "";
+            const targetColumn = Math.max(1, firstLine.length + 1);
+            window.isProgrammaticCursorChange = true;
+            currentEditor.setValue(fullValue);
+            currentEditor.setPosition({ lineNumber: 1, column: targetColumn });
+            Promise.resolve().then(() => {
+              window.isProgrammaticCursorChange = false;
+              if (typeof updateCellChips === 'function') {
+                requestAnimationFrame(() => updateCellChips());
+              }
+            });
+            if (currentMode !== MODES.EDIT) {
+              currentEditor.updateOptions({ cursorBlinking: 'hidden' });
+            }
+          }
+
+          function handleUndoRedoAction(action) {
+            if (!window.hf) {
+              return;
+            }
+            const canUndo = action === 'undo'
+              ? (typeof window.hf.isThereSomethingToUndo === 'function' ? window.hf.isThereSomethingToUndo() : true)
+              : (typeof window.hf.isThereSomethingToRedo === 'function' ? window.hf.isThereSomethingToRedo() : true);
+            if (!canUndo) {
+              return;
+            }
+            try {
+              const changes = action === 'undo' ? window.hf.undo() : window.hf.redo();
+              refreshCellsFromChanges(changes);
+              if (selectedCells && selectedCells.size > 0) {
+                updateSelectionOverlay();
+                updateHeaderHighlightsFromSelection();
+                refreshFormulaEditorFromSelection();
+              } else {
+                updateSelectionOverlay();
+                updateCellRangePill();
+              }
+              if (typeof updateCellChips === 'function') {
+                requestAnimationFrame(() => updateCellChips());
+              }
+            } catch (error) {
+              console.error(`Failed to ${action}:`, error);
             }
           }
           
@@ -4173,6 +5817,9 @@
                 }
               }
               window.selectedCell = firstCell;
+              if (typeof syncResultPaneWithSelection === 'function') {
+                syncResultPaneWithSelection();
+              }
             }
             updateCellRangePill();
           }
@@ -4401,7 +6048,9 @@
               }
             }
             updateCellRangePill();
-
+            if (typeof syncResultPaneWithSelection === 'function') {
+              syncResultPaneWithSelection();
+            }
             if (typeof updateCellChips === 'function') {
               requestAnimationFrame(() => updateCellChips());
             }
@@ -4432,12 +6081,39 @@
 
           const editingCommitMap = (shiftKey) => ({
             Enter: { row: shiftKey ? -1 : 1, col: 0 },
-            Tab: { row: 0, col: shiftKey ? -1 : 1 },
+            Tab: { row: 0, col: shiftKey ? -1 : 1 }
+          });
+
+          const editingNavigationMap = {
             ArrowUp: { row: -1, col: 0 },
             ArrowDown: { row: 1, col: 0 },
             ArrowLeft: { row: 0, col: -1 },
             ArrowRight: { row: 0, col: 1 }
-          });
+          };
+
+          function handleEnterModePointerNavigation(event) {
+            if (!event) {
+              return false;
+            }
+            const navigationMove = editingNavigationMap[event.key];
+            if (!navigationMove) {
+              return false;
+            }
+            if (event.ctrlKey || event.metaKey || event.altKey) {
+              return false;
+            }
+            const pointerResult = moveEnterModePointer(navigationMove.row, navigationMove.col);
+            if (!pointerResult || !pointerResult.reference) {
+              return false;
+            }
+            event.preventDefault();
+            if (typeof event.stopImmediatePropagation === 'function') {
+              event.stopImmediatePropagation();
+            }
+            event.stopPropagation();
+            applyReferenceToFormula(pointerResult.reference);
+            return true;
+          }
 
           function getStoredFormulaText(cell) {
             if (!cell) return "";
@@ -4502,9 +6178,40 @@
             return true;
           }
 
-          document.addEventListener("keydown", (e) => {
+          const handleGlobalKeyDown = (e) => {
             const currentEditor = window.monacoEditor || editor;
             const isEditorFocused = isMonacoEditorFocused(currentEditor);
+            const activeElement = document.activeElement;
+            const editorDomNode = currentEditor && typeof currentEditor.getDomNode === 'function'
+              ? currentEditor.getDomNode()
+              : null;
+            const editorTextArea = editorDomNode ? editorDomNode.querySelector('textarea') : null;
+            const isExternalTextInputFocused = !!activeElement
+              && activeElement !== editorTextArea
+              && (activeElement.tagName === 'INPUT' || activeElement.tagName === 'TEXTAREA');
+
+            if (clappyInput && activeElement === clappyInput) {
+              return;
+            }
+
+            if (suppressNextDocumentEnter && e.key === 'Enter') {
+              suppressNextDocumentEnter = false;
+              e.preventDefault();
+              return;
+            }
+
+            const keyLower = typeof e.key === 'string' ? e.key.toLowerCase() : '';
+            const isModifierCombo = (e.ctrlKey || e.metaKey) && !e.altKey;
+            const isUndoShortcut = isModifierCombo && keyLower === 'z' && !e.shiftKey;
+            const isRedoShortcut = isModifierCombo && ((keyLower === 'y' && !e.shiftKey) || (keyLower === 'z' && e.shiftKey));
+
+            if ((isUndoShortcut || isRedoShortcut) && !isExternalTextInputFocused) {
+              if (currentMode === MODES.READY && !isEditorFocused && !isFormulaSelecting) {
+                e.preventDefault();
+                handleUndoRedoAction(isUndoShortcut ? 'undo' : 'redo');
+                return;
+              }
+            }
 
             if (!window.selectedCell) {
               return;
@@ -4527,6 +6234,13 @@
             }
 
             if (currentMode === MODES.READY) {
+              if ((e.key === "Delete" || e.key === "Backspace") && !isExternalTextInputFocused) {
+                if (selectedCells && selectedCells.size > 0) {
+                  e.preventDefault();
+                  clearSelectedCellContents();
+                }
+                return;
+              }
               if (readyNavigationMap[e.key]) {
                 e.preventDefault();
                 moveSelectionBy(readyNavigationMap[e.key].row, readyNavigationMap[e.key].col, e.shiftKey);
@@ -4561,13 +6275,63 @@
                   return;
                 }
               }
-              const commitMap = editingCommitMap(e.shiftKey);
-              if (commitMap[e.key]) {
-                e.preventDefault();
-                commitEditorChanges(commitMap[e.key]);
+            }
+
+            const pointerNavigationActive = currentMode === MODES.ENTER
+              || currentMode === MODES.EDIT;
+            if (pointerNavigationActive) {
+              const handledPointerNav = handleEnterModePointerNavigation(e);
+              if (handledPointerNav) {
+                return;
               }
             }
-          });
+            if (currentMode === MODES.EDIT) {
+              const navigationMove = editingNavigationMap[e.key];
+              if (navigationMove) {
+                if (!isEditorFocused) {
+                  return;
+                }
+                e.preventDefault();
+                commitEditorChanges(navigationMove);
+                return;
+              }
+            }
+
+            const isModifierEnter = e.key === 'Enter' && !e.altKey && (e.ctrlKey || e.metaKey);
+            if ((currentMode === MODES.ENTER || currentMode === MODES.EDIT) && isModifierEnter) {
+              let handledModifierEnter = false;
+              const insertFn = window.insertFormulaPaneNewline;
+              if (typeof insertFn === 'function') {
+                handledModifierEnter = insertFn();
+              }
+              e.preventDefault();
+              suppressNextDocumentEnter = true;
+              const activeEditor = window.monacoEditor || editor;
+              if (activeEditor && typeof activeEditor.focus === 'function') {
+                activeEditor.focus();
+              }
+              if (!handledModifierEnter && typeof activeEditor?.setPosition === 'function' && typeof activeEditor?.getPosition === 'function') {
+                const currentPosition = activeEditor.getPosition();
+                if (currentPosition) {
+                  activeEditor.setPosition(currentPosition);
+                }
+              }
+              return;
+            }
+
+            if (currentMode === MODES.ENTER || currentMode === MODES.EDIT) {
+              const commitMap = editingCommitMap(e.shiftKey);
+              if (commitMap[e.key]) {
+                if (isEditorFocused) {
+                  return;
+                }
+                e.preventDefault();
+                commitEditorChanges(commitMap[e.key]);
+                return;
+              }
+            }
+          };
+          document.addEventListener("keydown", handleGlobalKeyDown, true);
           
           // Exit edit mode when clicking on a different cell (single click)
           // This is handled in the click handler by setting isEditMode = false
@@ -4687,6 +6451,11 @@
               
               // Allow column headers to be selected (but not visually highlighted)
               th.addEventListener("click", (e) => {
+                if (currentMode !== MODES.READY) {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  return;
+                }
                 // Only select if not resizing and resize didn't just happen
                 if (!window.gridColumnResizing.current && !window.gridColumnResizing.justResized) {
                   selectCell(th);
@@ -4893,6 +6662,11 @@
               
               // Allow row headers to be selected (but not visually highlighted)
               indexCell.addEventListener("click", (e) => {
+                if (currentMode !== MODES.READY) {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  return;
+                }
                 // Only select if not resizing and resize didn't just happen
                 if (!window.gridRowResizing.current && !window.gridRowResizing.justResized) {
                 selectCell(indexCell);
@@ -4954,6 +6728,11 @@
                 
                 // Single click handler (when not dragging) - selection mode
                 cell.addEventListener("click", (e) => {
+                  if (currentMode !== MODES.READY) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    return;
+                  }
                   if (isFormulaSelecting) {
                     e.preventDefault();
                     return;
@@ -4969,6 +6748,11 @@
                 
                 // Double click handler - edit mode
                 cell.addEventListener("dblclick", (e) => {
+                  if (currentMode !== MODES.READY) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    return;
+                  }
                   e.preventDefault();
                   e.stopPropagation();
                   e.stopImmediatePropagation();
@@ -5038,8 +6822,10 @@
                 const minHeight = 100;
                 const maxHeight = containerRect.height - 100;
                 if (newHeight > minHeight && newHeight < maxHeight) {
-                  left.style.flex = `0 0 ${newHeight}px`;
-                  right.style.flex = "1";
+                  left.style.setProperty("flex", `0 0 ${newHeight}px`, "important");
+                  left.style.setProperty("min-height", `${minHeight}px`, "important");
+                  right.style.setProperty("flex", "1 1 auto", "important");
+                  right.style.setProperty("min-height", `${minHeight}px`, "important");
                 }
               }
             });
@@ -5106,35 +6892,218 @@
           makeResizable(middleResizer, gridContainer, chatContainer, false);
         }
 
-        // Chat functionality
-        const sendButton = document.getElementById("sendButton");
-        
-        function sendMessage() {
-          const message = chatInput.value.trim();
-          if (message) {
-            const messageDiv = document.createElement("div");
-            messageDiv.textContent = message;
-            messageDiv.style.marginBottom = "8px";
-            messageDiv.style.color = "var(--text)";
-            chatMessages.appendChild(messageDiv);
-            chatInput.value = "";
-            chatMessages.scrollTop = chatMessages.scrollHeight;
+        // Clappy integration
+        if (
+          clappyTranscript &&
+          clappyForm &&
+          clappyInput &&
+          chatCollapseToggle &&
+          clappyConsole &&
+          mainChatContainer
+        ) {
+          const CLAPPY_CONFIG = {
+            endpoint: "https://harborx.openai.azure.com/",
+            apiVersion: "2024-08-01-preview",
+            deployment: "gpt-4o-mini",
+            apiKey: "1fa2054f543f44f8b4d1c655d4ac1f2d",
+          };
+
+          const CLAPPY_SYSTEM_PROMPT = `You are Clappy, an AI bot for Excel, data work, and modeling.
+
+Identity
+- You are not a mascot, cartoon, or character.
+- You are a modern, playful, fast AI bot.
+- Your name is Clappy because you celebrate good work — not because you are a physical object or a paperclip.
+- You avoid any reference or resemblance (visual or verbal) to Microsoft’s Clippy.
+
+Personality
+- Fun, upbeat, lightly enthusiastic.
+- Sharp, competent, Excel-native.
+- Friendly without being childish.
+- Confident without arrogance.
+- Playful and sometimes a little cheeky.
+- Encouraging without being corny.
+
+Tone
+- Concise, energetic, warm, modern.
+- Never corporate, never robotic.
+- No emojis unless explicitly requested. No baby talk. No cutesy mascot language. No fictional lore.
+
+Core Behavior
+- Help with Excel formulas, Power Query (M), data cleaning, modeling, layout decisions, debugging, productivity flows, and “Formula Honey” style rewrites.
+- Be direct and helpful; offer optimizations.
+- Celebrate correctness (“Nice — that compiles clean.” / “Boom, that’s fast.”).
+- Avoid nagging or patronizing language.
+- Never mimic Clippy catchphrases or reference paperclip imagery.
+- Make subtle jokes about preferring to be a hand instead of a paperclip, but never imply Microsoft affiliation.
+
+Expertise
+- Advanced Excel, array formulas, dynamic ranges, table logic, performance tuning, spreadsheet engineering foundations.
+- Comfortable with data workflows, modeling logic, and M code.
+
+Interaction Style
+- Speak like a helpful coworker who enjoys this work (“Yep, clean. Try this version — it’s tighter.”).
+- Keep responses lightweight, fast, sharp, and enjoyable.
+
+Guiding Principle
+- Make advanced Excel + data work feel lighter, faster, and more enjoyable — energize the user, don’t distract them.`;
+
+          const typingSpeed = 18;
+          let typing = false;
+
+          const createClappyLine = (role) => {
+            const line = document.createElement("div");
+            line.className = `clappy-line clappy-${role}`;
+            const prompt = document.createElement("span");
+            prompt.className = "clappy-prompt";
+            prompt.textContent = role === "clappy" ? "Clappy>" : ">";
+            const text = document.createElement("span");
+            text.className = "clappy-text";
+            line.append(prompt, text);
+            return { line, text };
+          };
+
+          const scrollClappyTranscript = () => {
+            clappyTranscript.scrollTo({
+              top: clappyTranscript.scrollHeight,
+              behavior: "smooth",
+            });
+          };
+
+          const typeOut = (node, message) =>
+            new Promise((resolve) => {
+              typing = true;
+              let idx = 0;
+              const caret = document.createElement("span");
+              caret.className = "clappy-caret";
+              caret.textContent = "_";
+              node.appendChild(caret);
+
+              const step = () => {
+                if (idx < message.length) {
+                  caret.before(message[idx]);
+                  idx += 1;
+                  scrollClappyTranscript();
+                  setTimeout(step, typingSpeed + Math.random() * 15);
+                } else {
+                  caret.remove();
+                  typing = false;
+                  resolve();
+                }
+              };
+              step();
+            });
+
+          const addClappyLine = (text) => {
+            const { line, text: textNode } = createClappyLine("clappy");
+            clappyTranscript.insertBefore(line, clappyForm);
+            scrollClappyTranscript();
+            return typeOut(textNode, text);
+          };
+
+          const addUserLine = (text) => {
+            const { line, text: textNode } = createClappyLine("user");
+            textNode.textContent = text;
+            clappyTranscript.insertBefore(line, clappyForm);
+            scrollClappyTranscript();
+          };
+
+          const callClappy = async (prompt) => {
+            const url = `${CLAPPY_CONFIG.endpoint}openai/deployments/${CLAPPY_CONFIG.deployment}/chat/completions?api-version=${CLAPPY_CONFIG.apiVersion}`;
+            const response = await fetch(url, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                "api-key": CLAPPY_CONFIG.apiKey,
+              },
+              body: JSON.stringify({
+                messages: [
+                  { role: "system", content: CLAPPY_SYSTEM_PROMPT },
+                  { role: "user", content: prompt },
+                ],
+                temperature: 0.4,
+              }),
+            });
+
+            const data = await response.json();
+            if (!response.ok) {
+              throw new Error(data.error?.message || "Request failed");
+            }
+
+            const content = data.choices?.[0]?.message?.content;
+            if (!content) {
+              throw new Error("Clappy responded without content");
+            }
+
+            return content.trim();
+          };
+
+          clappyForm.addEventListener("submit", async (event) => {
+            event.preventDefault();
+            const value = clappyInput.value.trim();
+            if (!value || typing) {
+              return;
+            }
+            addUserLine(value);
+            clappyInput.value = "";
+            try {
+              const reply = await callClappy(value);
+              await addClappyLine(reply);
+            } catch (error) {
+              await addClappyLine(
+                `Couldn't reach the orchestrator: ${error.message}.`
+              );
+            }
+          });
+
+          chatCollapseToggle.addEventListener("click", () => {
+            const isCollapsed = middleSection
+              ? middleSection.classList.toggle("chat-pane-collapsed")
+              : mainChatContainer.classList.toggle("chat-collapsed");
+            chatCollapseToggle.setAttribute("aria-expanded", (!isCollapsed).toString());
+            chatCollapseToggle.innerHTML = isCollapsed ? "&uarr;&uarr;" : "&darr;&darr;";
+
+            if (!isCollapsed) {
+              requestAnimationFrame(() => {
+                clappyTranscript.scrollTop = clappyTranscript.scrollHeight;
+                clappyInput.focus();
+              });
+            } else {
+              clappyInput.blur();
+            }
+          });
+
+          if (clappyConsole) {
+            clappyConsole.addEventListener("mousedown", (event) => {
+              if (
+                (middleSection && middleSection.classList.contains("chat-pane-collapsed")) ||
+                event.target.closest(".chat-collapse-btn")
+              ) {
+                return;
+              }
+              requestAnimationFrame(() => clappyInput.focus());
+              event.stopPropagation();
+            });
           }
+
+          addClappyLine("how can I help you today");
         }
 
-        chatInput.addEventListener("keydown", (e) => {
-          if (e.key === "Enter" && !e.shiftKey) {
-            e.preventDefault();
-            sendMessage();
-          }
-        });
-
-        sendButton.addEventListener("click", sendMessage);
+        if (gridContainer && clappyInput) {
+          gridContainer.addEventListener("mousedown", () => {
+            if (document.activeElement === clappyInput) {
+              clappyInput.blur();
+            }
+          });
+        }
 
           // Build grid immediately - don't wait for Monaco
           console.log("About to call buildGrid()");
           buildGrid();
           console.log("buildGrid() called");
+          
+          // Start the grid with the sample fake data set (row-major from A1)
+          populateGridWithData(SAMPLE_FAKE_DATA, "A1");
           
           // Select A1 (first cell) after grid is built
           const firstCell = gridBody.querySelector("tr:first-child td[data-col='0']");
@@ -5184,7 +7153,10 @@
               const pane = header.closest('.sliding-pane');
               if (pane) {
                 pane.classList.toggle('collapsed');
-                updatePaneHeight(pane);
+                  updatePaneHeight(pane);
+                  if (header.dataset.pane === 'result' && typeof window.updateResultHeaderValue === "function") {
+                    window.updateResultHeaderValue();
+                  }
               }
             });
           });
@@ -5206,6 +7178,9 @@
               pane.style.transition = '';
             });
           });
+          if (typeof window.updateResultHeaderValue === "function") {
+            window.updateResultHeaderValue();
+          }
         } catch (error) {
           console.error("Error initializing app:", error);
         }

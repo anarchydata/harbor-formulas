@@ -1,3 +1,5 @@
+@import url("https://fonts.googleapis.com/css2?family=VT323&display=swap");
+
 :root {
   color-scheme: dark;
   --background: #000000;
@@ -107,6 +109,34 @@ button {
   flex-shrink: 0;
   visibility: visible !important;
   opacity: 1 !important;
+}
+
+.sidebar-collapse-toggle {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: -1px;
+}
+
+.sidebar.collapsed {
+  width: 40px !important;
+  min-width: 40px !important;
+  border-right: none;
+}
+
+.sidebar.collapsed .sidebar-icon-bar {
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 0;
+  align-items: center;
+}
+
+.sidebar.collapsed .sidebar-icon {
+  width: 28px;
+  height: 28px;
+}
+
+.sidebar.collapsed .file-tree {
+  display: none;
 }
 
 .sidebar-icon-bar {
@@ -312,6 +342,56 @@ button {
   animation: tranquilPulseUniform 4s ease-in-out infinite;
 }
 
+.selection-border-handle {
+  position: absolute;
+  pointer-events: auto;
+  cursor: grab;
+  z-index: 102;
+}
+
+.selection-border-handle:active {
+  cursor: grabbing;
+}
+
+.selection-border-handle-top,
+.selection-border-handle-bottom {
+  left: -6px;
+  right: -6px;
+  height: 8px;
+}
+
+.selection-border-handle-top {
+  top: -8px;
+}
+
+.selection-border-handle-bottom {
+  bottom: -8px;
+}
+
+.selection-border-handle-left,
+.selection-border-handle-right {
+  top: -6px;
+  bottom: -6px;
+  width: 8px;
+}
+
+.selection-border-handle-left {
+  left: -8px;
+}
+
+.selection-border-handle-right {
+  right: -8px;
+}
+
+.selection-drag-preview {
+  position: absolute;
+  z-index: 99;
+  border: 1px dashed rgba(86, 156, 214, 0.7);
+  background-color: rgba(86, 156, 214, 0.08);
+  pointer-events: none;
+  display: none;
+}
+
 /* Fill handle - triangle in bottom-right corner */
 .selection-overlay .fill-handle {
   position: absolute;
@@ -327,6 +407,14 @@ button {
   clip-path: polygon(0% 100%, 100% 100%, 100% 0%);
   background-color: #569CD6;
   /* No rotation needed - triangle naturally sits in corner */
+}
+
+td.fill-preview {
+  background-color: rgba(86, 156, 214, 0.15);
+}
+
+td.fill-preview .grid-cell-display {
+  color: var(--text);
 }
 
 .grid-wrapper-inner::-webkit-scrollbar {
@@ -458,19 +546,35 @@ button {
   position: relative;
 }
 
-.grid-table tbody td[style*="width"] {
-  /* Allow inline width styles to override */
-}
-
 .grid-cell-display {
   padding: 2px 4px;
   width: 100%;
   height: 100%;
   display: block;
+  position: relative;
   overflow: hidden;
   text-overflow: clip;
   white-space: nowrap;
   font-family: "Consolas", "Courier New", monospace;
+}
+
+.grid-cell-display .cell-edit-caret {
+  display: inline-block;
+  width: 1.5px;
+  min-height: 1em;
+  height: 1.05em;
+  background: #8ec2ff;
+  vertical-align: text-bottom;
+  animation: cellEditCaretBlink 1s steps(1, end) infinite;
+}
+
+@keyframes cellEditCaretBlink {
+  0%, 55% {
+    opacity: 1;
+  }
+  56%, 100% {
+    opacity: 0;
+  }
 }
 
 .grid-table tbody td[data-showing-formula-text="true"] {
@@ -578,33 +682,9 @@ button {
   background-image: none !important;
 }
 
-/* Blink border 3 times when entering edit mode - quick succession */
-/* Override any pulse animations with the blink animation */
+/* Keep edit-mode border solid with no animation */
 .grid-table tbody td.selected.edit-mode::after {
-  animation: blinkBorder 0.36s ease-in-out;
-  /* Remove pulse animations during edit mode - just show solid border after blink */
-}
-
-/* Blink animation for cell border when entering edit mode - 3 quick blinks */
-@keyframes blinkBorder {
-  0%, 100% {
-    opacity: 1;
-  }
-  16.66%, 27.77% {
-    opacity: 0.2;
-  }
-  33.33%, 44.44% {
-    opacity: 1;
-  }
-  50%, 61.11% {
-    opacity: 0.2;
-  }
-  66.66%, 77.77% {
-    opacity: 1;
-  }
-  83.33%, 94.44% {
-    opacity: 0.2;
-  }
+  animation: none;
 }
 
 /* Calm, tranquil pulse animation for single cell - uniform glow all around */
@@ -733,13 +813,17 @@ button {
   background: var(--sidebar) !important;
 }
 
-.grid-table thead th.header-highlight,
-.grid-table tbody td:first-child.header-highlight {
+.grid-table thead th.header-highlight {
   background: #2b2b2b !important;
   color: #f5f5f5;
   box-shadow:
-    inset 0 -2px 0 #569cd6,
-    inset 0 2px 0 #569cd6;
+    inset 0 -2px 0 #569cd6;
+}
+
+.grid-table tbody td:first-child.header-highlight {
+  background: #2b2b2b !important;
+  color: #f5f5f5;
+  box-shadow: inset -2px 0 0 #569cd6;
 }
 
 .tabs-bar {
@@ -749,6 +833,7 @@ button {
   background: var(--background);
   border-top: 0.5px solid var(--border-thin);
   font-size: 12px;
+  position: relative;
 }
 
 .tab {
@@ -763,12 +848,29 @@ button {
   border-radius: 0;
 }
 
+.tab.tab-add {
+  font-weight: 600;
+}
+
 .tab.active {
   background: #1a1a1a;
   color: var(--text);
   border: 0.5px solid #000000;
   border-bottom: none;
   border-radius: 0;
+}
+
+.tab-rename-input {
+  padding: 4px 12px;
+  border: 0.5px solid #000000;
+  border-right: 0.5px solid #000000;
+  border-top: 0.5px solid #000000;
+  background: #1a1a1a;
+  color: var(--text);
+  font-size: 12px;
+  font-family: inherit;
+  outline: none;
+  box-sizing: border-box;
 }
 
 /* Chat Section */
@@ -778,89 +880,138 @@ button {
   flex-direction: column;
   background: var(--background);
   border-top: 0.5px solid var(--border-thin);
-  visibility: visible !important;
-  opacity: 1 !important;
   min-height: 200px;
+  overflow: hidden;
+  transition: max-height 0.25s ease;
+  max-height: 100%;
 }
 
-.chat-header {
-  padding: 4px 8px;
-  background: var(--panel);
-  border-bottom: 0.5px solid var(--border-thin);
-  font-size: 12px;
-  color: var(--text-muted);
+.middle-section.chat-pane-collapsed .chat-container {
+  max-height: 40px;
+  min-height: 40px;
 }
 
-.chat-messages {
-  flex: 1;
-  overflow-y: auto;
-  padding: 8px;
-  font-size: 12px;
-}
-
-.chat-input-area {
-  padding: 8px;
-  padding-bottom: 16px;
-  background: var(--background);
+.chat-toolbar {
   display: flex;
-  align-items: flex-end;
-  gap: 8px;
-}
-
-.chat-input-wrapper {
-  flex: 1;
-  display: flex;
-  align-items: flex-end;
-  gap: 8px;
-  background: #1a1a1a;
-  border: 0.5px solid var(--border-thin);
-  border-radius: 8px;
-  padding: 8px;
-}
-
-.chat-input {
-  flex: 1;
-  padding: 6px 8px;
-  background: transparent;
-  border: none;
-  color: var(--text);
-  font-size: 12px;
+  justify-content: flex-end;
+  padding: 6px 8px 4px;
   font-family: inherit;
-  resize: none;
-  outline: none;
+  background: var(--background);
 }
 
-.chat-buttons {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.chat-button {
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  background: var(--panel);
-  border: none;
+.chat-collapse-btn {
+  border: 1px solid var(--border-thin);
+  border-radius: 4px;
+  background: #1c1c1c;
   color: var(--text);
+  font-size: 11px;
+  padding: 4px 12px;
   cursor: pointer;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.chat-collapse-btn:hover {
+  background: var(--hover);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.clappy-console {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 0 32px;
+  font-family: "Consolas", "Courier New", "Segoe UI Mono", monospace;
+  font-size: 11px;
+  color: #e5f5ff;
+}
+
+.clappy-transcript {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  overflow-y: auto;
+  padding: 0;
+  line-height: 1.4;
+}
+
+.clappy-transcript::-webkit-scrollbar {
+  width: 6px;
+}
+.chat-container {
+  transition: flex-basis 0.25s ease;
+}
+
+.middle-section.chat-pane-collapsed .grid-container {
+  flex: 1 1 auto !important;
+}
+
+.middle-section.chat-pane-collapsed #middleResizer {
+  display: none;
+}
+
+.clappy-transcript::-webkit-scrollbar-thumb {
+  background: #1f2a3e;
+}
+
+.clappy-line {
+  display: flex;
+  gap: 10px;
+}
+
+.clappy-prompt {
+  flex-shrink: 0;
+  color: #8ef2a0;
+}
+
+.clappy-line.clappy-user .clappy-prompt {
+  color: #cfd4dc;
+}
+
+.clappy-text {
+  white-space: pre-wrap;
+  color: #8ef2a0;
+}
+
+.clappy-line.clappy-user .clappy-text {
+  color: #d3d7df;
+}
+
+.clappy-caret {
+  display: inline-block;
+  min-width: 0.6ch;
+  color: #5af2c2;
+  animation: clappyCursorBlink 0.8s steps(1) infinite;
+}
+
+@keyframes clappyCursorBlink {
+  50% {
+    opacity: 0;
+  }
+}
+
+.clappy-form {
   display: flex;
   align-items: center;
-  justify-content: center;
-  font-size: 14px;
+  gap: 10px;
   padding: 0;
 }
 
-.chat-button:hover {
-  background: var(--hover);
+.clappy-form .clappy-prompt {
+  color: #6f91a8;
 }
 
-.chat-button.send {
-  background: var(--panel);
-}
-
-.chat-button.send:hover {
-  background: var(--accent);
+.clappy-form input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: #d3d7df;
+  font: inherit;
+  font-size: 11px;
+  caret-color: #5af2c2;
 }
 
 /* Right Side - Formula Editor */
@@ -926,7 +1077,6 @@ button {
   position: relative !important;
   vertical-align: baseline !important;
   box-sizing: border-box !important;
-  background: var(--chip-background-color, rgba(86, 156, 214, 0.2)) !important;
   pointer-events: none !important;
 }
 
@@ -935,6 +1085,7 @@ button {
   border-right: none !important;
   border-radius: 4px 0 0 4px !important;
   padding: 1px 0 !important;
+  background: var(--chip-background-color, rgba(86, 156, 214, 0.2)) !important;
 }
 
 .cell-chip-inline-core {
@@ -943,6 +1094,7 @@ button {
   border-left: none !important;
   border-right: none !important;
   padding: 1px 0 !important;
+  background: var(--chip-background-color, rgba(86, 156, 214, 0.2)) !important;
 }
 
 .cell-chip-inline-right {
@@ -950,6 +1102,7 @@ button {
   border-left: none !important;
   border-radius: 0 4px 4px 0 !important;
   padding: 1px 0 !important;
+  background: var(--chip-background-color, rgba(86, 156, 214, 0.2)) !important;
 }
 
 .chip-color-0 {
@@ -1073,7 +1226,8 @@ button {
 }
 
 .editor-wrapper {
-  flex: 1;
+  flex: 0 0 60%;
+  height: 60%;
   display: flex !important;
   background: #000000; /* Always black - never grey */
   overflow: hidden !important;
@@ -1090,38 +1244,45 @@ button {
   visibility: visible !important;
   opacity: 1 !important;
   /* Keep wrapper neutral – inner shell handles visuals */
+  margin-top: 8px;
+  margin-bottom: 16px;
+  padding-right: 0;
+  padding-bottom: 24px;
+  box-sizing: border-box;
 }
 
 .editor-shell {
   flex: 1;
   display: flex;
   background: #000000;
-  border-radius: 6px;
+  border-radius: 0;
   border: 1px solid rgba(255, 255, 255, 0.08);
   position: relative;
   overflow: hidden;
-  transition: border-color 120ms ease;
+  box-sizing: border-box;
+  margin-right: 12px;
+  margin-bottom: 0;
 }
 
-.editor-wrapper.editor-edit-mode .editor-shell {
-  border-color: rgba(142, 194, 255, 0.45);
+.editor-wrapper .monaco-editor .overflow-guard > .monaco-scrollable-element {
+  border-radius: 0;
+  border: 1px solid transparent;
+  background: #0b0b0b;
 }
 
-.editor-wrapper .monaco-editor .view-lines {
-  transition: box-shadow 150ms ease, filter 150ms ease;
-  border-radius: 4px;
+.editor-wrapper .monaco-editor .view-lines,
+.editor-wrapper .monaco-editor .view-overlays,
+.editor-wrapper .monaco-editor .contentWidgets {
+  background-color: #0b0b0b;
+  padding-left: 2px;
 }
 
-.editor-wrapper.editor-edit-mode .monaco-editor .view-lines {
-  box-shadow:
-    0 0 0 1px rgba(142, 194, 255, 0.6),
-    0 0 18px rgba(142, 194, 255, 0.35);
-  filter: drop-shadow(0 0 4px rgba(142, 194, 255, 0.3));
+.editor-wrapper.editor-edit-mode .monaco-editor .overflow-guard > .monaco-scrollable-element {
+  border-color: rgba(70, 70, 70, 1);
 }
 
-.editor-wrapper:not(.editor-edit-mode) .monaco-editor .view-lines {
-  box-shadow: none;
-  filter: none;
+.editor-wrapper:not(.editor-edit-mode) .monaco-editor .overflow-guard > .monaco-scrollable-element {
+  border-color: transparent;
 }
 
 /* Monaco editor text - always full opacity, no opacity changes */
@@ -1177,11 +1338,6 @@ button {
   height: 22px;
 }
 
-.sliding-pane:not(.collapsed) {
-  /* Height will be set by JavaScript to 20% of formula editor */
-  /* Animation is handled by CSS transition on height property */
-}
-
 .sliding-pane.collapsed {
   height: 22px !important;
 }
@@ -1231,6 +1387,48 @@ button {
   letter-spacing: 0.5px;
   padding: 4px 0;
   margin-right: 8px;
+}
+
+.pane-header-value {
+  margin-left: 6px;
+  font-size: 11px;
+  font-family: "Consolas", "Courier New", monospace;
+  color: #ffffff;
+  max-width: 60%;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 0 0 auto;
+}
+
+.pane-header-value[data-status="error"] {
+  color: #f48771;
+}
+
+.result-output {
+  background: #1b1b1b;
+  border-radius: 4px;
+  padding: 8px 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-family: "Consolas", "Courier New", monospace;
+  color: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.result-output-success .result-value {
+  color: #ffffff;
+}
+
+.result-output-error {
+  color: #f48771;
+}
+
+.result-output-error .result-value {
+  color: #f48771;
 }
 
 .pane-indicators {
@@ -1285,6 +1483,9 @@ button {
   overflow-x: hidden;
   font-size: 11px;
   color: var(--text);
+  /* Custom scrollbar styling similar to grid */
+  scrollbar-width: thin;
+  scrollbar-color: rgba(60, 60, 60, 0.5) transparent;
 }
 
 .message-item {
@@ -1349,9 +1550,58 @@ button {
   font-size: 10px;
   font-style: italic;
 }
-  /* Custom scrollbar styling similar to grid */
-  scrollbar-width: thin;
-  scrollbar-color: rgba(60, 60, 60, 0.5) transparent;
+
+#resultContent {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.result-output {
+  background: #1b1b1b;
+  border-radius: 4px;
+  padding: 8px 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-family: "Consolas", "Courier New", monospace;
+  color: #dcdcdc;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.result-output-success {
+  color: #dcdcdc;
+}
+
+.result-output-error {
+  color: #f48771;
+}
+
+.result-label {
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #9a9a9a;
+}
+
+.result-output-error .result-label {
+  color: #f48771;
+}
+
+.result-value {
+  font-size: 13px;
+  font-weight: 600;
+  flex: 1;
+  text-align: right;
+  color: inherit;
+  overflow-wrap: anywhere;
+}
+
+.result-placeholder {
+  font-size: 11px;
+  color: #6f6f6f;
+  font-style: italic;
 }
 
 .pane-content::-webkit-scrollbar {
@@ -1456,6 +1706,12 @@ button {
 /* Alternative selector for Monaco line numbers */
 .formula-editor .monaco-editor .margin-view-overlays .line-numbers .line-number:first-child {
   color: #858585 !important; /* Light grey for the "=" text */
+}
+
+.formula-editor .monaco-editor .margin,
+.formula-editor .monaco-editor .margin-view-overlays {
+  min-height: 100%;
+  height: 100%;
 }
 
 /* Target the specific line number that shows "=" */

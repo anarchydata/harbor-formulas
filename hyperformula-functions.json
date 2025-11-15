@@ -159,7 +159,7 @@
     },
     {
       "name": "BINOM.DIST",
-      "signature": "BINOM.DIST(number, number, number, logical)",
+      "signature": "BINOM.DIST(number, number, number, logical)", 
       "description": ""
     },
     {
