@@ -26,12 +26,14 @@ export function createFunctionSnippet(func) {
   return `${func.name}(${snippetParams.join(', ')})`;
 }
 
+const DEFAULT_MIN_LINES = 30;
+
 export function ensureSevenLines(value) {
   const lines = value.split('\n');
-  while (lines.length < 7) {
+  while (lines.length < DEFAULT_MIN_LINES) {
     lines.push('');
   }
-  return lines.slice(0, 7).join('\n');
+  return lines.slice(0, DEFAULT_MIN_LINES).join('\n');
 }
 
 export function stripComments(formulaText) {

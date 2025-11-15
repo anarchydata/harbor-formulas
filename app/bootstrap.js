@@ -10,6 +10,7 @@ import {
   extendWithCustomFunctions,
   BASE_CHIP_COLORS
 } from '../utils/helpers.js';
+import { createDiagnosticsProvider as createExternalDiagnosticsProvider } from '../utils/diagnostics.js';
 import {
   generateValueFill,
   AutofillDirection,
@@ -1238,6 +1239,12 @@ export async function initializeApp() {
                       "editor.lineHighlightBackground": "#000000",
                       "editorIndentGuide.background": "#404040",
                       "editorIndentGuide.activeBackground": "#707070",
+                      "editorError.foreground": "#FF5C57",
+                      "editorWarning.foreground": "#FFB454",
+                      "editorInfo.foreground": "#5CC5FF",
+                      "editorError.border": "#000000",
+                      "editorWarning.border": "#000000",
+                      "editorInfo.border": "#000000"
                     }
                   });
 
@@ -1343,8 +1350,8 @@ export async function initializeApp() {
                   monacoEditorContainer.style.height = "100%";
                   monacoEditorContainer.style.minHeight = "0px";
 
-                  // Create initial value with 7 empty lines
-                  const initialValue = "\n\n\n\n\n\n\n";
+                  // Create initial value with default padded lines
+                  const initialValue = ensureSevenLines("");
 
                     editor = monaco.editor.create(monacoEditorContainer, {
                     value: initialValue,
@@ -1368,8 +1375,8 @@ export async function initializeApp() {
                     hideCursorInOverviewRuler: true,
                     overviewRulerLanes: 0,
                     renderIndentGuides: false,
-                    selectionHighlight: false,
-                    occurrencesHighlight: false,
+                    selectionHighlight: true,
+                    occurrencesHighlight: true,
                     guides: {
                       indentation: false,
                       highlightActiveIndentation: false,
@@ -2158,25 +2165,59 @@ export async function initializeApp() {
                       };
                     }
 
+                    const externalDiagnosticsProvider =
+                      typeof createExternalDiagnosticsProvider === 'function'
+                        ? createExternalDiagnosticsProvider(monaco)
+                        : null;
+
                     // Custom diagnostics provider for formula validation
                     const diagnosticsProvider = {
                       provideDiagnostics: function(model, lastResult) {
                         const diagnostics = [];
                         const text = model.getValue();
 
-                        // Get all lines from editor
+                        const mergeWithExternalMarkers = (markers = []) => {
+                          if (
+                            !externalDiagnosticsProvider ||
+                            typeof externalDiagnosticsProvider.provideDiagnostics !== 'function'
+                          ) {
+                            return { markers };
+                          }
+
+                          const externalResult = externalDiagnosticsProvider.provideDiagnostics(model, lastResult);
+                          const externalMarkers = Array.isArray(externalResult?.markers) ? externalResult.markers : [];
+
+                          if (!externalMarkers.length) {
+                            return { markers };
+                          }
+
+                          if (!Array.isArray(markers) || !markers.length) {
+                            return { markers: externalMarkers };
+                          }
+
+                          return { markers: [...externalMarkers, ...markers] };
+                        };
+
                         const lines = text.split('\n');
-                        if (lines.length < 1) return { markers: [] };
 
                         // Get formula from all lines and strip comments (both inline // and block /* */)
                         // Use the stripComments helper function for consistency
                         const fullText = lines.join('\n');
-                        const formulaWithoutComments = stripComments(fullText);
-
-                        if (!formulaWithoutComments) return { markers: [] };
+                        const formulaWithoutComments = stripComments(fullText) || '';
 
                         // Use formula without comments for validation
-                        const formulaText = formulaWithoutComments;
+                        let formulaText = formulaWithoutComments;
+                        if (formulaText) {
+                          const trimmed = formulaText.trim();
+                          if (!trimmed.startsWith('=')) {
+                            formulaText = `=${trimmed}`;
+                          } else {
+                            formulaText = trimmed;
+                          }
+                        } else {
+                          // Pure comments or whitespace – no diagnostics
+                          return mergeWithExternalMarkers([]);
+                        }
 
                         // Check for common syntax errors
                         // 1. Check for unclosed string quotes
@@ -2492,8 +2533,8 @@ export async function initializeApp() {
                             }
 
                             if (argErrorMessage) {
-                              const callStartPos = indexToEditorPosition(formulaText, functionMatch.index);
-                              const callEndPos = indexToEditorPosition(formulaText, closeParenIndex + 1);
+                              const callStartPos = indexToEditorPosition(formulaText, openParenIndex + 1);
+                              const callEndPos = indexToEditorPosition(formulaText, Math.max(openParenIndex + 1, closeParenIndex));
 
                               diagnostics.push({
                                 severity: monaco.MarkerSeverity.Error,
@@ -2724,7 +2765,7 @@ export async function initializeApp() {
                           }
                         }
 
-                        return { markers: diagnostics };
+                        return mergeWithExternalMarkers(diagnostics);
                       }
                     };
 
@@ -3107,8 +3148,8 @@ export async function initializeApp() {
                       const diagnostics = diagnosticsProvider.provideDiagnostics(model, null);
                       const markers = Array.isArray(diagnostics?.markers) ? diagnostics.markers : [];
 
-                      // Override Monaco markers to prevent text highlighting while keeping diagnostics data
-                      monaco.editor.setModelMarkers(model, 'formula-validator', []);
+                      // Apply Monaco markers so inline highlights/squiggles appear
+                      monaco.editor.setModelMarkers(model, 'formula-validator', markers);
 
                       // Update messages pane with diagnostics
                       updateMessagesPane(markers);
@@ -5231,6 +5272,8 @@ export async function initializeApp() {
               fillHandleElement.style.display = "block";
             }
           }
+
+          window.updateSelectionOverlay = updateSelectionOverlay;
 
           function getSelectionBoundsInfo() {
             if (!selectedCells || selectedCells.size === 0) {

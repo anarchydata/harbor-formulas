@@ -900,21 +900,31 @@ td.fill-preview .grid-cell-display {
 }
 
 .chat-collapse-btn {
-  border: 1px solid var(--border-thin);
+  border: none;
   border-radius: 4px;
-  background: #1c1c1c;
+  background: transparent;
   color: var(--text);
-  font-size: 11px;
   padding: 4px 12px;
   cursor: pointer;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.2s ease;
+}
+
+.chat-collapse-btn .chat-chevron {
+  width: 16px;
+  height: 16px;
+  transition: transform 0.2s ease;
+}
+
+.chat-collapse-btn[aria-expanded="false"] .chat-chevron {
+  transform: rotate(180deg);
 }
 
 .chat-collapse-btn:hover {
   background: var(--hover);
-  border-color: var(--accent);
-  color: var(--accent);
+  color: #ffffff;
 }
 
 .clappy-console {
@@ -1319,6 +1329,10 @@ td.fill-preview .grid-cell-display {
 .editor-wrapper .monaco-editor .contentWidgets {
   background-color: #0b0b0b;
   padding-left: 2px;
+}
+
+.editor-wrapper .monaco-editor .view-overlays {
+  z-index: 1;
 }
 
 .editor-wrapper.editor-edit-mode .monaco-editor .overflow-guard > .monaco-scrollable-element {

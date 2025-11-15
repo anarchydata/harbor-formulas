@@ -115,9 +115,9 @@ export function initCustomScrollbars() {
 
         gridInner.addEventListener("scroll", () => {
           updateScrollbars();
-          // Update selection overlay position on scroll
-          if (selectedCells && selectedCells.size > 0) {
-            updateSelectionOverlay();
+          const hasSelection = window.selectedCells && window.selectedCells.size > 0;
+          if (hasSelection && typeof window.updateSelectionOverlay === "function") {
+            window.updateSelectionOverlay();
           }
         });
         window.addEventListener("resize", updateScrollbars);

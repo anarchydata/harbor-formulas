@@ -94,8 +94,21 @@
               aria-expanded="true"
               aria-controls="clappyConsole"
               title="Collapse chat panel"
+              aria-label="Collapse chat panel"
             >
-              &darr;&darr;
+              <svg
+                class="chat-chevron"
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                role="presentation"
+                aria-hidden="true"
+              >
+                <path
+                  d="M5.47 8.97a.75.75 0 0 1 1.06 0L12 14.44l5.47-5.47a.75.75 0 0 1 1.06 1.06l-6 6a.75.75 0 0 1-1.06 0l-6-6a.75.75 0 0 1 0-1.06Z"
+                  fill="currentColor"
+                />
+              </svg>
             </button>
           </div>
           <div class="clappy-console" id="clappyConsole" aria-label="Clappy command console">

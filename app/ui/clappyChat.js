@@ -168,7 +168,6 @@ export function initClappyChat({
       ? middleSection.classList.toggle("chat-pane-collapsed")
       : chatContainer.classList.toggle("chat-collapsed");
     chatToggle.setAttribute("aria-expanded", (!isCollapsed).toString());
-    chatToggle.innerHTML = isCollapsed ? "&uarr;&uarr;" : "&darr;&darr;";
 
     if (!isCollapsed) {
       requestAnimationFrame(() => {
