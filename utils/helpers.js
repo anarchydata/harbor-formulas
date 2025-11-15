@@ -108,6 +108,91 @@ export function stripComments(formulaText) {
   return result.trim();
 }
 
+function getCommentRanges(text) {
+  if (!text) return [];
+
+  const ranges = [];
+  let inString = false;
+  let escaped = false;
+  let inBlockComment = false;
+  let inInlineComment = false;
+  let blockCommentStart = -1;
+  let inlineCommentStart = -1;
+
+  for (let i = 0; i < text.length; i++) {
+    const char = text[i];
+    const nextChar = i < text.length - 1 ? text[i + 1] : '';
+
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+
+    if (char === '\\') {
+      escaped = true;
+      continue;
+    }
+
+    if (!inBlockComment && !inInlineComment && char === '"' && !escaped) {
+      inString = !inString;
+      continue;
+    }
+
+    if (inString) {
+      continue;
+    }
+
+    if (!inBlockComment && !inInlineComment && char === '/' && nextChar === '*') {
+      inBlockComment = true;
+      blockCommentStart = i;
+      i++;
+      continue;
+    }
+
+    if (inBlockComment && char === '*' && nextChar === '/') {
+      ranges.push({ start: blockCommentStart, end: i + 2 });
+      inBlockComment = false;
+      blockCommentStart = -1;
+      i++;
+      continue;
+    }
+
+    if (!inBlockComment && !inInlineComment && char === '/' && nextChar === '/') {
+      inInlineComment = true;
+      inlineCommentStart = i;
+      i++;
+      continue;
+    }
+
+    if (inInlineComment && char === '\n') {
+      ranges.push({ start: inlineCommentStart, end: i });
+      inInlineComment = false;
+      inlineCommentStart = -1;
+    }
+  }
+
+  if (inBlockComment && blockCommentStart !== -1) {
+    ranges.push({ start: blockCommentStart, end: text.length });
+  }
+
+  if (inInlineComment && inlineCommentStart !== -1) {
+    ranges.push({ start: inlineCommentStart, end: text.length });
+  }
+
+  return ranges;
+}
+
+function isIndexInRanges(index, ranges) {
+  if (!Array.isArray(ranges) || ranges.length === 0) return false;
+  for (let i = 0; i < ranges.length; i++) {
+    const range = ranges[i];
+    if (index >= range.start && index < range.end) {
+      return true;
+    }
+  }
+  return false;
+}
+
 export function escapeHtml(text = '') {
   const div = document.createElement('div');
   div.textContent = text;
@@ -176,6 +261,7 @@ export function detectCellReferences(text) {
 
   const cellRefs = [];
   const seen = new Set();
+  const commentRanges = getCommentRanges(text);
 
   const cellPattern = /(?:'[^']+'!)?(\$?[A-Z]+\$?[0-9]+\$?)(?:\s*:\s*(\$?[A-Z]+\$?[0-9]+\$?)?)?/gi;
   const columnPattern = /(?:'[^']+'!)?(\$?[A-Z]+)\s*:\s*(\$?[A-Z]+)/gi;
@@ -214,14 +300,14 @@ export function detectCellReferences(text) {
 
   let match;
   while ((match = cellPattern.exec(text)) !== null) {
-    if (isInsideQuotes(text, match.index)) {
+    if (isInsideQuotes(text, match.index) || isIndexInRanges(match.index, commentRanges)) {
       continue;
     }
     addMatch(match[0], match.index);
   }
 
   while ((match = columnPattern.exec(text)) !== null) {
-    if (isInsideQuotes(text, match.index)) {
+    if (isInsideQuotes(text, match.index) || isIndexInRanges(match.index, commentRanges)) {
       continue;
     }
     addMatch(match[0], match.index);
@@ -274,4 +360,6 @@ export const BASE_CHIP_COLORS = [
   { name: 'Slate', hex: '#8F8F8F' },
   { name: 'Snow', hex: '#FFFFFF' }
 ];
+
+
 

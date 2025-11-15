@@ -2,25 +2,270 @@
  * Diagnostics provider for formula validation
  * Validates Excel formulas and marks errors with red squiggles
  */
+function isInsideQuotes(text, position) {
+  if (!text || typeof position !== 'number' || position < 0) {
+    return false;
+  }
+
+  let inDoubleQuotes = false;
+  let escaped = false;
+  const limit = Math.min(position, text.length);
+
+  for (let i = 0; i < limit; i++) {
+    const char = text[i];
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+    if (char === '\\') {
+      escaped = true;
+      continue;
+    }
+    if (char === '"') {
+      inDoubleQuotes = !inDoubleQuotes;
+    }
+  }
+
+  return inDoubleQuotes;
+}
+
+function analyzeParentheses(text) {
+  let openParens = 0;
+  let closeParens = 0;
+  let depth = 0;
+  let firstExtraClosingIndex = -1;
+  let inDoubleQuotes = false;
+  let inSingleQuotes = false;
+  let braceDepth = 0;
+
+  for (let i = 0; i < text.length; i++) {
+    const char = text[i];
+    const nextChar = text[i + 1];
+
+    // Handle Excel-style escaped quotes ("") and sheet names wrapped in ''
+    if (!inSingleQuotes && char === '"') {
+      if (nextChar === '"') {
+        i++;
+        continue;
+      }
+      inDoubleQuotes = !inDoubleQuotes;
+      continue;
+    }
+
+    if (!inDoubleQuotes && char === "'") {
+      if (nextChar === "'") {
+        i++;
+        continue;
+      }
+      inSingleQuotes = !inSingleQuotes;
+      continue;
+    }
+
+    if (inDoubleQuotes || inSingleQuotes) {
+      continue;
+    }
+
+    if (char === '{') {
+      braceDepth++;
+      continue;
+    }
+
+    if (char === '}' && braceDepth > 0) {
+      braceDepth--;
+      continue;
+    }
+
+    if (braceDepth > 0) {
+      continue;
+    }
+
+    if (char === '(') {
+      openParens++;
+      depth++;
+    } else if (char === ')') {
+      closeParens++;
+      depth--;
+      if (depth < 0 && firstExtraClosingIndex === -1) {
+        firstExtraClosingIndex = i;
+        depth = 0;
+      }
+    }
+  }
+
+  return { openParens, closeParens, firstExtraClosingIndex };
+}
+
+function findTrailingCommaPositions(text) {
+  const positions = [];
+  let inDoubleQuotes = false;
+  let inSingleQuotes = false;
+  let braceDepth = 0;
+  let parenDepth = 0;
+
+  for (let i = 0; i < text.length; i++) {
+    const char = text[i];
+    const nextChar = text[i + 1];
+
+    if (!inSingleQuotes && char === '"') {
+      if (nextChar === '"') {
+        i++;
+        continue;
+      }
+      inDoubleQuotes = !inDoubleQuotes;
+      continue;
+    }
+
+    if (!inDoubleQuotes && char === "'") {
+      if (nextChar === "'") {
+        i++;
+        continue;
+      }
+      inSingleQuotes = !inSingleQuotes;
+      continue;
+    }
+
+    if (inDoubleQuotes || inSingleQuotes) {
+      continue;
+    }
+
+    if (char === '{') {
+      braceDepth++;
+      continue;
+    }
+
+    if (char === '}' && braceDepth > 0) {
+      braceDepth--;
+      continue;
+    }
+
+    if (braceDepth > 0) {
+      continue;
+    }
+
+    if (char === '(') {
+      parenDepth++;
+      continue;
+    }
+
+    if (char === ')') {
+      if (parenDepth > 0) {
+        parenDepth--;
+      }
+      continue;
+    }
+
+    if (char === ',' && parenDepth > 0) {
+      let lookaheadIndex = i + 1;
+      while (lookaheadIndex < text.length && /\s/.test(text[lookaheadIndex])) {
+        lookaheadIndex++;
+      }
+      if (text[lookaheadIndex] === ')') {
+        positions.push(i);
+      }
+    }
+  }
+
+  return positions;
+}
+
+function findDanglingEndCommaIndex(text) {
+  for (let i = text.length - 1; i >= 0; i--) {
+    const char = text[i];
+    if (/\s/.test(char)) {
+      continue;
+    }
+    if (char === ',' && !isInsideQuotes(text, i)) {
+      return i;
+    }
+    break;
+  }
+  return -1;
+}
+
+function stripLineComments(text) {
+  if (!text) {
+    return '';
+  }
+
+  let result = '';
+  let inDoubleQuotes = false;
+  let inSingleQuotes = false;
+  let inLineComment = false;
+
+  for (let i = 0; i < text.length; i++) {
+    const char = text[i];
+    const nextChar = text[i + 1];
+
+    if (inLineComment) {
+      if (char === '\n' || char === '\r') {
+        inLineComment = false;
+        result += char;
+      } else {
+        result += ' ';
+      }
+      continue;
+    }
+
+    if (!inSingleQuotes && char === '"') {
+      if (nextChar === '"') {
+        result += char;
+        i++;
+        result += text[i];
+        continue;
+      }
+      inDoubleQuotes = !inDoubleQuotes;
+      result += char;
+      continue;
+    }
+
+    if (!inDoubleQuotes && char === "'") {
+      if (nextChar === "'") {
+        result += char;
+        i++;
+        result += text[i];
+        continue;
+      }
+      inSingleQuotes = !inSingleQuotes;
+      result += char;
+      continue;
+    }
+
+    if (!inSingleQuotes && !inDoubleQuotes && char === '/' && nextChar === '/') {
+      inLineComment = true;
+      result += ' ';
+      i++;
+      result += ' ';
+      continue;
+    }
+
+    result += char;
+  }
+
+  return result;
+}
+
 export function createDiagnosticsProvider(monaco) {
   return {
     provideDiagnostics: function(model, lastResult) {
       const diagnostics = [];
       const text = model.getValue();
+      const sanitizedText = stripLineComments(text);
       
-      // Skip first line (the "=" visual indicator line)
-      const lines = text.split('\n');
-      if (lines.length < 2) return { markers: [] };
-      
-      // Get formula starting from line 2
-      const formulaText = lines.slice(1).join('\n').trim();
-      if (!formulaText) return { markers: [] };
+      const lines = sanitizedText.split('\n');
+      if (!lines.length) return { markers: [] };
+
+      const formulaText = sanitizedText;
+      const trimmedFormulaText = formulaText.trim();
+      if (!trimmedFormulaText) return { markers: [] };
+
+      const lineOffset = 0;
+      const toEditorLineFromIndex = (lineIndexZeroBased) => lineIndexZeroBased + 1 + lineOffset;
+      const toEditorLineFromCount = (lineCountOneBased) => lineCountOneBased + lineOffset;
       
       // Check for common syntax errors
       // 1. Check for periods in function arguments (should be commas)
       // Need to check if we're in a function context and if parentheses are closed
-      const openParens = (formulaText.match(/\(/g) || []).length;
-      const closeParens = (formulaText.match(/\)/g) || []).length;
+      const { openParens, closeParens } = analyzeParentheses(formulaText);
       const hasUnclosedParens = openParens > closeParens;
       
       // Pattern: value followed by period (in function context)
@@ -29,11 +274,28 @@ export function createDiagnosticsProvider(monaco) {
       const periodPattern = /(\w+|"[^"]*"|[A-Z]+\$?\d+\$?)\s*\./g;
       let match;
       while ((match = periodPattern.exec(formulaText)) !== null) {
+        const tokenStartIndex = match.index;
+        const dotIndex = match.index + match[0].length - 1;
+
+        // Ignore dots that are part of a string literal (e.g., "0.00")
+        if (isInsideQuotes(formulaText, tokenStartIndex) || isInsideQuotes(formulaText, dotIndex)) {
+          continue;
+        }
+
+        // Ignore periods that are clearly part of a quoted string literal
+        if (match[1]?.startsWith('"') && match[1]?.endsWith('"')) {
+          continue;
+        }
+        // Ignore periods when there's a newline between the token and the period
+        if (match[0].includes('\n')) {
+          continue;
+        }
+
         // Calculate line and column in the editor
         const beforeMatch = formulaText.substring(0, match.index);
         const formulaLines = beforeMatch.split('\n');
         const formulaLineIndex = formulaLines.length - 1;
-        const editorLineNumber = formulaLineIndex + 2; // +2 because line 1 is skipped, +1 for 1-based
+        const editorLineNumber = toEditorLineFromIndex(formulaLineIndex);
         const periodColumn = formulaLines[formulaLineIndex].length + match[1].length + 1; // Position of period
         
         // Check if we're in a function call context
@@ -62,14 +324,14 @@ export function createDiagnosticsProvider(monaco) {
               const functionStart = functionMatch.index;
               const functionStartLines = formulaText.substring(0, functionStart).split('\n');
               const functionStartLineIndex = functionStartLines.length - 1;
-              const functionStartEditorLine = functionStartLineIndex + 2;
+              const functionStartEditorLine = toEditorLineFromIndex(functionStartLineIndex);
               const functionStartColumn = functionStartLines[functionStartLineIndex].length + 1;
               
               // Find the end of the function (last closing paren)
               const lastCloseParen = formulaText.lastIndexOf(')');
               const functionEndLines = formulaText.substring(0, lastCloseParen + 1).split('\n');
               const functionEndLineIndex = functionEndLines.length - 1;
-              const functionEndEditorLine = functionEndLineIndex + 2;
+              const functionEndEditorLine = toEditorLineFromIndex(functionEndLineIndex);
               const functionEndColumn = functionEndLines[functionEndLineIndex].length;
               
               diagnostics.push({
@@ -93,7 +355,7 @@ export function createDiagnosticsProvider(monaco) {
         const beforeMatch = formulaText.substring(0, match.index);
         const formulaLines = beforeMatch.split('\n');
         const formulaLineIndex = formulaLines.length - 1;
-        const editorLineNumber = formulaLineIndex + 2; // +2 because line 1 is skipped, +1 for 1-based
+        const editorLineNumber = toEditorLineFromIndex(formulaLineIndex);
         const column = formulaLines[formulaLineIndex].length + 1; // +1 for 1-based
         
         diagnostics.push({
@@ -107,22 +369,64 @@ export function createDiagnosticsProvider(monaco) {
           code: 'DOUBLE_COMMA'
         });
       }
+
+      // 3. Check for trailing commas before closing parentheses (only when parentheses are balanced)
+      const trailingCommaPositions = findTrailingCommaPositions(formulaText);
+      trailingCommaPositions.forEach((commaIndex) => {
+        const beforeMatch = formulaText.substring(0, commaIndex);
+        const formulaLines = beforeMatch.split('\n');
+        const formulaLineIndex = formulaLines.length - 1;
+        const editorLineNumber = toEditorLineFromIndex(formulaLineIndex);
+        const column = formulaLines[formulaLineIndex].length + 1;
+
+        diagnostics.push({
+          severity: monaco.MarkerSeverity.Error,
+          startLineNumber: editorLineNumber,
+          startColumn: column,
+          endLineNumber: editorLineNumber,
+          endColumn: column + 1,
+          message: 'Unexpected trailing comma before closing parenthesis',
+          source: 'Formula Validator',
+          code: 'TRAILING_COMMA'
+        });
+      });
       
-      // 3. Validate formula syntax with HyperFormula if available
+      if (openParens === closeParens) {
+        const danglingEndCommaIndex = findDanglingEndCommaIndex(formulaText);
+        if (danglingEndCommaIndex !== -1) {
+          const beforeMatch = formulaText.substring(0, danglingEndCommaIndex);
+          const formulaLines = beforeMatch.split('\n');
+          const formulaLineIndex = formulaLines.length - 1;
+          const editorLineNumber = toEditorLineFromIndex(formulaLineIndex);
+          const column = formulaLines[formulaLineIndex].length + 1;
+
+          diagnostics.push({
+            severity: monaco.MarkerSeverity.Error,
+            startLineNumber: editorLineNumber,
+            startColumn: column,
+            endLineNumber: editorLineNumber,
+            endColumn: column + 1,
+            message: 'Unexpected trailing comma at end of formula',
+            source: 'Formula Validator',
+            code: 'END_TRAILING_COMMA'
+          });
+        }
+      }
+      
+      // 4. Validate formula syntax with HyperFormula if available
       // Only validate if the formula looks complete (has closing parens, etc.)
-      if (window.hf && formulaText) {
+      if (window.hf && trimmedFormulaText) {
         try {
           // Ensure formula starts with '='
-          const testFormula = formulaText.startsWith('=') ? formulaText : '=' + formulaText;
+          const testFormula = trimmedFormulaText.startsWith('=') ? trimmedFormulaText : '=' + trimmedFormulaText;
           
           // Check for common syntax errors first (parentheses, periods, etc.)
-          const openParens = (formulaText.match(/\(/g) || []).length;
-          const closeParens = (formulaText.match(/\)/g) || []).length;
+          const { openParens, closeParens } = analyzeParentheses(formulaText);
           
           // Only validate with HyperFormula if the formula looks syntactically complete
           // Don't validate incomplete formulas (missing closing parens, etc.)
           // This prevents false positives for formulas that are still being typed
-          const isLikelyComplete = openParens === closeParens && formulaText.trim().length > 0;
+          const isLikelyComplete = openParens === closeParens && trimmedFormulaText.length > 0;
           
           if (isLikelyComplete) {
             // Try to validate the formula by attempting to set it in a test cell
@@ -175,12 +479,12 @@ export function createDiagnosticsProvider(monaco) {
               // Only mark if it's clearly a parse/syntax error
               if (isSyntaxError) {
                 // Mark as syntax error
-                const formulaStart = formulaText.startsWith('=') ? 1 : 0;
+                const formulaStart = trimmedFormulaText.startsWith('=') ? 1 : 0;
                 diagnostics.push({
                   severity: monaco.MarkerSeverity.Error,
-                  startLineNumber: 2, // Line 2 is where formula starts
+                  startLineNumber: lineOffset + 1,
                   startColumn: formulaStart + 1,
-                  endLineNumber: 2,
+                  endLineNumber: lineOffset + 1,
                   endColumn: Math.min(formulaText.length + 1, 200),
                   message: 'Invalid formula syntax',
                   source: 'HyperFormula',
@@ -208,9 +512,9 @@ export function createDiagnosticsProvider(monaco) {
                   
                   diagnostics.push({
                     severity: monaco.MarkerSeverity.Warning, // Use warning instead of error for incomplete formulas
-                    startLineNumber: lineNum + 1, // +1 because line 1 is the "=" line
+                    startLineNumber: toEditorLineFromCount(lineNum),
                     startColumn: colNum + 1,
-                    endLineNumber: lineNum + 1,
+                    endLineNumber: toEditorLineFromCount(lineNum),
                     endColumn: colNum + 2,
                     message: 'Missing closing parenthesis',
                     source: 'Formula Validator',
@@ -220,29 +524,18 @@ export function createDiagnosticsProvider(monaco) {
               }
             } else if (closeParens > openParens) {
               // Extra closing parenthesis - always mark this as an error
-              let unmatchedCount = 0;
-              let firstUnmatched = -1;
-              for (let i = 0; i < formulaText.length; i++) {
-                if (formulaText[i] === '(') unmatchedCount++;
-                if (formulaText[i] === ')') {
-                  unmatchedCount--;
-                  if (unmatchedCount < 0 && firstUnmatched === -1) {
-                    firstUnmatched = i;
-                    break;
-                  }
-                }
-              }
+              const { firstExtraClosingIndex } = analyzeParentheses(formulaText);
               
-              if (firstUnmatched !== -1) {
-                const formulaLines = formulaText.substring(0, firstUnmatched + 1).split('\n');
+              if (firstExtraClosingIndex !== -1) {
+                const formulaLines = formulaText.substring(0, firstExtraClosingIndex + 1).split('\n');
                 const lineNum = formulaLines.length;
                 const colNum = formulaLines[formulaLines.length - 1].length;
                 
                 diagnostics.push({
                   severity: monaco.MarkerSeverity.Error,
-                  startLineNumber: lineNum + 1,
+                  startLineNumber: toEditorLineFromCount(lineNum),
                   startColumn: colNum,
-                  endLineNumber: lineNum + 1,
+                  endLineNumber: toEditorLineFromCount(lineNum),
                   endColumn: colNum + 1,
                   message: 'Extra closing parenthesis',
                   source: 'Formula Validator',

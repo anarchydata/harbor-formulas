@@ -31,11 +31,17 @@ export async function initializeApp() {
           // Initialize HyperFormula instance (following official documentation)
           window.hf = HyperFormula.buildEmpty({
             licenseKey: 'gpl-v3', // Using GPL license for open source projects
-            undoLimit: 500
+            undoLimit: 500,
+            useArrayArithmetic: true // Enable array arithmetic globally so range math works like Excel
           });
 
           // Initialize named ranges storage (Set for fast lookup)
           window.namedRanges = new Set();
+
+          // Store raw formulas (including comments) keyed by sheet + cell reference
+          const existingRawStore = window.rawFormulaStore;
+          const rawFormulaStore = existingRawStore instanceof Map ? existingRawStore : new Map();
+          window.rawFormulaStore = rawFormulaStore;
 
           // Add Sheet1 - addSheet() returns the sheet name, not the ID
           const sheetName = window.hf.addSheet('Sheet1');
@@ -91,6 +97,22 @@ export async function initializeApp() {
           const editorStatusBarElement = document.getElementById("editorStatusBar");
           const editorStatusLineElement = document.getElementById("editorStatusLine");
           const editorStatusColumnElement = document.getElementById("editorStatusColumn");
+          const dependenciesContentElement = document.getElementById("dependenciesContent");
+          const dependenciesCountElement = document.getElementById("dependenciesCount");
+          const updateDependenciesCountBadge = (countValue) => {
+            if (!dependenciesCountElement) {
+              return;
+            }
+            const safeCount = Number.isFinite(countValue) && countValue > 0 ? Math.floor(countValue) : 0;
+            dependenciesCountElement.textContent = String(safeCount);
+            dependenciesCountElement.setAttribute(
+              "aria-label",
+              `${safeCount} ${safeCount === 1 ? "dependency" : "dependencies"}`
+            );
+            dependenciesCountElement.dataset.hasValue = safeCount > 0 ? "true" : "false";
+          };
+
+          updateDependenciesCountBadge(0);
 
           window.monacoEditor = null;
           let editor = null;
@@ -275,8 +297,6 @@ export async function initializeApp() {
           const chipHighlightedCells = new Map();
           let nextChipColorIndex = 0;
           let isFormulaSelecting = false;
-          let formulaSelectionStartCell = null;
-          let formulaSelectionCurrentCell = null;
           let selectedCells = new Set();
           window.selectedCells = selectedCells;
           const highlightedRowHeaders = new Set();
@@ -463,74 +483,27 @@ export async function initializeApp() {
             };
           }
 
-          function getChipReferenceAtCursor(editorInstance) {
-            if (!editorInstance || typeof editorInstance.getPosition !== 'function' || typeof editorInstance.getModel !== 'function') {
+          function getChipReferenceAtCursor() {
               return null;
-            }
-            const position = editorInstance.getPosition();
-            if (!position) {
-              return null;
-            }
-            const chipRange = getChipRangeAtPosition(position);
-            if (!chipRange) {
-              return null;
-            }
-            const model = editorInstance.getModel();
-            if (!model || typeof model.getValueInRange !== 'function') {
-              return null;
-            }
-            const chipValue = model.getValueInRange(chipRange);
-            return chipValue ? chipValue.trim() : null;
           }
 
-          function isCursorOnCellChip(editorInstance) {
-            return !!getChipReferenceAtCursor(editorInstance);
+          function isCursorOnCellChip() {
+            return false;
           }
 
-          function armEditModePointerNavigation(anchorRef = null) {
-            if (currentMode !== MODES.EDIT) {
-              return;
-            }
-            editModePointerArmed = true;
-            if (anchorRef) {
-              enterModePointerState.rangeAnchorRef = anchorRef;
-            }
-          }
+          function armEditModePointerNavigation() {}
 
           function disarmEditModePointerNavigation() {
-            if (!editModePointerArmed && !editModeRangeHighlight.active) {
-              return;
-            }
-            editModePointerArmed = false;
-            enterModePointerState.rangeAnchorRef = null;
             clearEditModeRangeHighlight();
           }
 
-          function isEditModePointerNavigationAllowed(editorInstance) {
-            if (currentMode !== MODES.EDIT) {
-              return false;
-            }
-            const onChip = isCursorOnCellChip(editorInstance);
-            if (onChip) {
-              editModePointerArmed = true;
+          function isEditModePointerNavigationAllowed() {
               return true;
-            }
-            return editModePointerArmed;
           }
 
-          function getCurrentPointerReference(editorInstance = null) {
-            const chipRef = editorInstance ? getChipReferenceAtCursor(editorInstance) : null;
-            if (chipRef) {
-              return chipRef;
-            }
-            if (!enterModePointerState.active) {
+          function getCurrentPointerReference() {
               const anchorCell = window.selectedCell || null;
               return anchorCell ? anchorCell.getAttribute("data-ref") : null;
-            }
-            if (typeof enterModePointerState.pointerRow === 'number' && typeof enterModePointerState.pointerCol === 'number') {
-              return addressToCellRef(enterModePointerState.pointerRow, enterModePointerState.pointerCol);
-            }
-            return enterModePointerState.anchorCellRef || (window.selectedCell ? window.selectedCell.getAttribute("data-ref") : null);
           }
 
           function buildRangeReference(startRef, endRef) {
@@ -672,7 +645,7 @@ export async function initializeApp() {
                 if (event.button !== 0) {
                   return;
                 }
-                if (isEditMode || isFormulaSelecting) {
+                if (isEditMode) {
                   return;
                 }
                 if (!selectedCells || selectedCells.size === 0) {
@@ -983,12 +956,7 @@ export async function initializeApp() {
             return true;
           }
 
-          function cancelFormulaSelection() {
-            isFormulaSelecting = false;
-            formulaSelectionStartCell = null;
-            formulaSelectionCurrentCell = null;
-            document.body.style.userSelect = "";
-          }
+          function cancelFormulaSelection() {}
 
           function normalizeCellReference(ref = '') {
             if (!ref) return '';
@@ -1729,8 +1697,7 @@ export async function initializeApp() {
                         // Always provide comma and closing parenthesis suggestions (for Tab completion)
                         // These will be available via Tab key but won't show popup automatically
                         if (isInFunctionCall) {
-                          const openParens = (textBeforeCursor.match(/\(/g) || []).length;
-                          const closeParens = (textBeforeCursor.match(/\)/g) || []).length;
+                          const { openParens, closeParens } = analyzeParentheses(textBeforeCursor);
                           const hasUnclosedParens = openParens > closeParens;
 
                           if (hasUnclosedParens) {
@@ -1869,7 +1836,7 @@ export async function initializeApp() {
                           })
                           .map(func => {
                             // Calculate the correct range based on actual word
-                            const wordStart = textUntilPosition.length - actualWord.length;
+                              const wordStart = textUntilPosition.length - actualWord.length;
                             const correctRange = {
                               startLineNumber: position.lineNumber,
                               endLineNumber: position.lineNumber,
@@ -2165,6 +2132,71 @@ export async function initializeApp() {
                       };
                     }
 
+                    function analyzeParentheses(text) {
+                      let openParens = 0;
+                      let closeParens = 0;
+                      let depth = 0;
+                      let firstExtraClosingIndex = -1;
+                      let inDoubleQuotes = false;
+                      let inSingleQuotes = false;
+                      let braceDepth = 0;
+
+                      for (let i = 0; i < text.length; i++) {
+                        const char = text[i];
+                        const nextChar = text[i + 1];
+
+                        if (!inSingleQuotes && char === '"') {
+                          if (nextChar === '"') {
+                            i++;
+                            continue;
+                          }
+                          inDoubleQuotes = !inDoubleQuotes;
+                          continue;
+                        }
+
+                        if (!inDoubleQuotes && char === "'") {
+                          if (nextChar === "'") {
+                            i++;
+                            continue;
+                          }
+                          inSingleQuotes = !inSingleQuotes;
+                          continue;
+                        }
+
+                        if (inDoubleQuotes || inSingleQuotes) {
+                          continue;
+                        }
+
+                        if (char === '{') {
+                          braceDepth++;
+                          continue;
+                        }
+
+                        if (char === '}' && braceDepth > 0) {
+                          braceDepth--;
+                          continue;
+                        }
+
+                        if (braceDepth > 0) {
+                          continue;
+                        }
+
+                        if (char === '(') {
+                          openParens++;
+                          depth++;
+                        } else if (char === ')') {
+                          closeParens++;
+                          depth--;
+                          if (depth < 0 && firstExtraClosingIndex === -1) {
+                            firstExtraClosingIndex = i;
+                            depth = 0;
+                          }
+                        }
+                      }
+
+                      return { openParens, closeParens, firstExtraClosingIndex };
+                    }
+
                     const externalDiagnosticsProvider =
                       typeof createExternalDiagnosticsProvider === 'function'
                         ? createExternalDiagnosticsProvider(monaco)
@@ -2218,6 +2250,14 @@ export async function initializeApp() {
                           // Pure comments or whitespace – no diagnostics
                           return mergeWithExternalMarkers([]);
                         }
+
+                        // Track recognized cell/range references so diagnostics can skip valid chips
+                        const cellReferenceRanges = detectCellReferences(formulaText)
+                          .filter((ref) => typeof ref.start === 'number' && typeof ref.end === 'number' && ref.end > ref.start)
+                          .map((ref) => ({
+                            start: ref.start,
+                            end: ref.end
+                          }));
 
                         // Check for common syntax errors
                         // 1. Check for unclosed string quotes
@@ -2304,109 +2344,9 @@ export async function initializeApp() {
                           return commentIndex >= 0 ? line.substring(0, commentIndex) : line;
                         });
 
-                        // Process each line to find disconnected expressions on the same line
-                        for (let lineIndex = 0; lineIndex < linesWithoutComments.length; lineIndex++) {
-                          const line = linesWithoutComments[lineIndex];
-                          if (!line || !line.trim()) continue; // Skip empty lines
-
-                          // Find: end of expression -> whitespace -> start of expression
-                          // Pattern: expression end (string, paren, number, cell, identifier) -> whitespace -> expression start
-                          // Without operator between
-
-                          // Pattern 1: String literal followed by whitespace and another expression (not operator)
-                          // Example: "Jordan " 1+1
-                          const stringDisconnect = /"([^"\\]|\\.)*"\s+(?![+\-*/&^=<>(),])(?=("|\d+|[A-Z]+\$?\d+\$?|[A-Za-z_][A-Za-z0-9_]*\s*\())/g;
-                          let match;
-
-                          while ((match = stringDisconnect.exec(line)) !== null) {
-                            // Check if what comes before ends with an operator
-                            const before = line.substring(0, match.index);
-                            const endsWithOp = /(<=|>=|<>|[+\-*/&^=<>])\s*$/.test(before);
-
-                            if (!endsWithOp) {
-                              // Found disconnected expression
-                              const whitespaceMatch = match[0].match(/\s+$/);
-                              const whitespaceLength = whitespaceMatch ? whitespaceMatch[0].length : 0;
-                              const errorStart = match.index + match[0].length - whitespaceLength;
-                              const errorEnd = match.index + match[0].length;
-
-                              diagnostics.push({
-                                severity: monaco.MarkerSeverity.Error,
-                                startLineNumber: lineIndex + 1,
-                                startColumn: errorStart + 1,
-                                endLineNumber: lineIndex + 1,
-                                endColumn: errorEnd + 1,
-                                message: 'Disconnected expression - expressions must be connected by operators (+, -, *, /, etc.) or ampersand (&) for text concatenation',
-                                source: 'Formula Validator',
-                                code: 'DISCONNECTED_EXPRESSION'
-                              });
-                              break; // Only report first error per line
-                            }
-                          }
-
-                          // Pattern 2: Number, cell reference, identifier, or closing paren followed by whitespace and another expression
-                          // Example: IF(...) 1+1, 10 20, A1 B1
-                          const expressionDisconnect = /(\)|"([^"\\]|\\.)*"|\b\d+\.?\d*|\b[A-Z]+\$?\d+\$?|\b[A-Za-z_][A-Za-z0-9_]*)\s+(?![+\-*/&^=<>(),])(?=("|\d+|[A-Z]+\$?\d+\$?|[A-Za-z_][A-Za-z0-9_]*\s*\())/g;
-
-                          while ((match = expressionDisconnect.exec(line)) !== null) {
-                            // Skip if this is a string (already handled by string pattern)
-                            if (match[1] && match[1].startsWith('"')) continue;
-
-                            // Check if what comes before ends with an operator
-                            const before = line.substring(0, match.index);
-                            const endsWithOp = /(<=|>=|<>|[+\-*/&^=<>])\s*$/.test(before);
-
-                            if (!endsWithOp) {
-                              // Found disconnected expression
-                              const errorStart = match.index + match[1].length;
-                              const errorEnd = match.index + match[0].length;
-
-                              diagnostics.push({
-                                severity: monaco.MarkerSeverity.Error,
-                                startLineNumber: lineIndex + 1,
-                                startColumn: errorStart + 1,
-                                endLineNumber: lineIndex + 1,
-                                endColumn: errorEnd + 1,
-                                message: 'Disconnected expression - expressions must be connected by operators (+, -, *, /, etc.) or ampersand (&) for text concatenation',
-                                source: 'Formula Validator',
-                                code: 'DISCONNECTED_EXPRESSION'
-                              });
-                              break; // Only report first error per line
-                            }
-                          }
-                        }
-
-                        // Also check for disconnected expressions across lines
-                        for (let i = 1; i < linesWithoutComments.length; i++) {
-                          const prevLine = linesWithoutComments[i - 1].trim();
-                          const currentLine = linesWithoutComments[i].trim();
-
-                          if (!prevLine || !currentLine) continue; // Skip if either line is empty
-
-                          // Check if previous line ends with an operator
-                          const prevEndsWithOp = /(<=|>=|<>|[+\-*/&^=<>])\s*$/.test(prevLine);
-                          // Check if current line starts with an operator
-                          const currentStartsWithOp = /^\s*(<=|>=|<>|[+\-*/&^=<>])/.test(currentLine);
-
-                          // If neither, these are disconnected expressions
-                          if (!prevEndsWithOp && !currentStartsWithOp) {
-                            diagnostics.push({
-                              severity: monaco.MarkerSeverity.Error,
-                              startLineNumber: i + 1,
-                              startColumn: 1,
-                              endLineNumber: i + 1,
-                              endColumn: currentLine.length + 1,
-                              message: 'Disconnected expression - expressions on separate lines must be connected by operators (+, -, *, /, etc.) or ampersand (&) for text concatenation',
-                              source: 'Formula Validator',
-                              code: 'DISCONNECTED_EXPRESSION'
-                            });
-                          }
-                        }
-
                         // 3. Check for periods in function arguments (should be commas)
                         // Need to check if we're in a function context and if parentheses are closed
-                        const openParens = (formulaText.match(/\(/g) || []).length;
-                        const closeParens = (formulaText.match(/\)/g) || []).length;
+                        const { openParens, closeParens } = analyzeParentheses(formulaText);
                         const hasUnclosedParens = openParens > closeParens;
 
                         // Pattern: value followed by period (in function context)
@@ -2415,6 +2355,14 @@ export async function initializeApp() {
                         const periodPattern = /(\w+|"[^"]*"|[A-Z]+\$?\d+\$?)\s*\./g;
                         let match;
                         while ((match = periodPattern.exec(formulaText)) !== null) {
+                          const tokenStartIndex = match.index;
+                          const dotIndex = match.index + match[0].length - 1;
+
+                          // Ignore dots that live inside completed quoted strings (e.g., "0.00")
+                          if (isInsideQuotes(formulaText, tokenStartIndex) || isInsideQuotes(formulaText, dotIndex)) {
+                            continue;
+                          }
+
                           // Calculate line and column in the editor
                           const beforeMatch = formulaText.substring(0, match.index);
                           const formulaLines = beforeMatch.split('\n');
@@ -2560,16 +2508,22 @@ export async function initializeApp() {
                           const startPos = match.index;
                           const endPos = startPos + identifier.length;
 
+                          // Skip identifiers that fall entirely inside a recognized cell/range reference (chip)
+                          const insideCellReference = cellReferenceRanges.some((range) => {
+                            return startPos >= range.start && endPos <= range.end;
+                          });
+                          if (insideCellReference) {
+                            continue;
+                          }
+
                           // Skip if we've already processed this position
                           if (processedPositions.has(startPos)) continue;
                           processedPositions.add(startPos);
 
-                          // Check if identifier is inside a quoted string
-                          const textBefore = formulaText.substring(0, startPos);
-                          const openQuotes = (textBefore.match(/"/g) || []).length;
-                          const closeQuotes = (textBefore.match(/"/g) || []).length;
-                          const isInsideString = (openQuotes % 2 === 1);
-                          if (isInsideString) continue;
+                          // Ignore identifiers that live inside completed quoted strings
+                          if (isInsideQuotes(formulaText, startPos)) {
+                            continue;
+                          }
 
                           // Check if it's followed by a parenthesis - treat as function call even if list not loaded yet
                           const trailingText = formulaText.substring(endPos);
@@ -2624,8 +2578,7 @@ export async function initializeApp() {
                             const testFormula = formulaText.startsWith('=') ? formulaText : '=' + formulaText;
 
                             // Check for common syntax errors first (parentheses, periods, etc.)
-                            const openParens = (formulaText.match(/\(/g) || []).length;
-                            const closeParens = (formulaText.match(/\)/g) || []).length;
+                            const { openParens, closeParens, firstExtraClosingIndex } = analyzeParentheses(formulaText);
 
                             // Only validate with HyperFormula if the formula looks syntactically complete
                             // Don't validate incomplete formulas (missing closing parens, etc.)
@@ -2728,21 +2681,10 @@ export async function initializeApp() {
                                 }
                               } else if (closeParens > openParens) {
                                 // Extra closing parenthesis - always mark this as an error
-                                let unmatchedCount = 0;
-                                let firstUnmatched = -1;
-                                for (let i = 0; i < formulaText.length; i++) {
-                                  if (formulaText[i] === '(') unmatchedCount++;
-                                  if (formulaText[i] === ')') {
-                                    unmatchedCount--;
-                                    if (unmatchedCount < 0 && firstUnmatched === -1) {
-                                      firstUnmatched = i;
-                                      break;
-                                    }
-                                  }
-                                }
+                                const extraIndex = typeof firstExtraClosingIndex === 'number' ? firstExtraClosingIndex : -1;
 
-                                if (firstUnmatched !== -1) {
-                                  const formulaLines = formulaText.substring(0, firstUnmatched + 1).split('\n');
+                                if (extraIndex !== -1) {
+                                  const formulaLines = formulaText.substring(0, extraIndex + 1).split('\n');
                                   const lineNum = formulaLines.length;
                                   const colNum = formulaLines[formulaLines.length - 1].length;
 
@@ -3169,13 +3111,160 @@ export async function initializeApp() {
                     // Initial validation to set up messages pane
                     validateFormula();
 
+                    function getTopLeftCellFromNormalizedReference(referenceText = '') {
+                      if (!referenceText) {
+                        return '';
+                      }
+                      if (!referenceText.includes(':')) {
+                        return referenceText;
+                      }
+                      const parts = referenceText.split(':').filter(Boolean);
+                      if (parts.length === 0) {
+                        return '';
+                      }
+                      if (parts.length === 1) {
+                        return parts[0];
+                      }
+                      const startAddress = cellRefToAddress(parts[0]);
+                      const endAddress = cellRefToAddress(parts[1]);
+                      if (!startAddress && !endAddress) {
+                        return '';
+                      }
+                      if (!startAddress) {
+                        return parts[1];
+                      }
+                      if (!endAddress) {
+                        return parts[0];
+                      }
+                      const minRow = Math.min(startAddress[0], endAddress[0]);
+                      const minCol = Math.min(startAddress[1], endAddress[1]);
+                      return addressToCellRef(minRow, minCol);
+                    }
+
+                    function getCellPreviewForDependencies(cellRef) {
+                      if (!cellRef || !window.hf) {
+                        return { text: '', type: 'empty' };
+                      }
+                      const address = cellRefToAddress(cellRef);
+                      if (!address) {
+                        return { text: '', type: 'empty' };
+                      }
+                      const [row, col] = address;
+                      const sheetId = getActiveSheetId();
+                      let formulaText = '';
+                      try {
+                        formulaText = window.hf.getCellFormula({ col, row, sheet: sheetId });
+                      } catch (error) {
+                        formulaText = '';
+                      }
+                      if (typeof formulaText === 'string' && formulaText.trim()) {
+                        const trimmedFormula = formulaText.trim();
+                        return {
+                          text: trimmedFormula.startsWith('=') ? trimmedFormula : `=${trimmedFormula}`,
+                          type: 'formula'
+                        };
+                      }
+                      let rawValue = null;
+                      try {
+                        rawValue = window.hf.getCellValue({ col, row, sheet: sheetId });
+                      } catch (error) {
+                        rawValue = null;
+                      }
+                      if (rawValue === null || typeof rawValue === 'undefined') {
+                        return { text: '', type: 'empty' };
+                      }
+                      const interpreted = typeof interpretPreviewValue === 'function'
+                        ? interpretPreviewValue(rawValue)
+                        : null;
+                      const interpretedValue = interpreted && Object.prototype.hasOwnProperty.call(interpreted, 'value')
+                        ? interpreted.value
+                        : rawValue;
+                      const finalText = interpretedValue === null || typeof interpretedValue === 'undefined'
+                        ? ''
+                        : String(interpretedValue);
+                      return {
+                        text: finalText,
+                        type: finalText ? 'value' : 'empty'
+                      };
+                    }
+
+                    function renderDependenciesPaneFromReferences(referenceMatches = [], context = {}) {
+                      if (!dependenciesContentElement) {
+                        return;
+                      }
+
+                      const formulaText = typeof context.formulaText === 'string' ? context.formulaText : '';
+                      const normalizedFormula = stripComments(formulaText).trim();
+                      if (!normalizedFormula) {
+                        updateDependenciesCountBadge(0);
+                        dependenciesContentElement.innerHTML = '<div class="dependencies-empty">Enter a formula to view dependencies.</div>';
+                        return;
+                      }
+
+                      const uniqueRefs = [];
+                      const seenRefs = new Set();
+
+                      referenceMatches.forEach((match) => {
+                        const displayText = (match?.fullMatch || match?.range || match?.text || '').trim();
+                        if (!displayText) {
+                          return;
+                        }
+                        const normalized = normalizeCellReference(match?.text || match?.range || match?.fullMatch || displayText);
+                        if (!normalized || seenRefs.has(normalized)) {
+                          return;
+                        }
+                        seenRefs.add(normalized);
+                        uniqueRefs.push({
+                          displayText,
+                          normalized,
+                          colorKey: match?.fullMatch || match?.range || match?.text || displayText
+                        });
+                      });
+
+                      if (uniqueRefs.length === 0) {
+                        updateDependenciesCountBadge(0);
+                        dependenciesContentElement.innerHTML = '<div class="dependencies-empty">No cell references detected.</div>';
+                        return;
+                      }
+
+                      const listItemsHtml = uniqueRefs.map((refInfo) => {
+                        const firstCellRef = getTopLeftCellFromNormalizedReference(refInfo.normalized);
+                        const chipClassName = getChipColorClass(refInfo.colorKey);
+                        const valueInfo = getCellPreviewForDependencies(firstCellRef);
+                        const hasValueText = typeof valueInfo.text === 'string' && valueInfo.text.trim().length > 0;
+                        const valueMarkup = hasValueText
+                          ? escapeHtml(valueInfo.text)
+                          : '<span class="dependency-empty-value">Empty</span>';
+                        const valueClass = valueInfo.type === 'formula' ? 'is-formula' : '';
+                        const safeReferenceLabel = escapeHtml(refInfo.displayText);
+                        const cellMarkup = firstCellRef
+                          ? escapeHtml(firstCellRef)
+                          : '<span class="dependency-empty-value">Unknown</span>';
+                        const chipClassAttribute = chipClassName ? ` ${chipClassName}` : '';
+                        return `
+                          <div class="dependency-item${chipClassAttribute}">
+                            <span class="dependency-chip" aria-hidden="true"></span>
+                            <div class="dependency-body">
+                              <div class="dependency-reference">${safeReferenceLabel}</div>
+                              <div class="dependency-first-cell">
+                                <span class="dependency-first-address">${cellMarkup}</span>
+                                <span class="dependency-value ${valueClass}">${valueMarkup}</span>
+                              </div>
+                            </div>
+                          </div>
+                        `;
+                      }).join('');
+
+                      updateDependenciesCountBadge(uniqueRefs.length);
+                      dependenciesContentElement.innerHTML = `<div class="dependencies-list">${listItemsHtml}</div>`;
+                    }
+
                     // Cell chip tracking for inline cell references
                     let cellChipDecorations = [];
                     let cellChipRanges = [];
                     let chipUpdateTimeout;
                     let isCursorInChip = false;
                     let editorHasFocus = true;
-                    let incompleteChipCursorLock = null;
                     const defaultQuickSuggestions = editor.getOption(monaco.editor.EditorOption.quickSuggestions);
                     let chipSuppressedQuickSuggestions = false;
 
@@ -3231,6 +3320,7 @@ export async function initializeApp() {
                         resetChipColorAssignments();
                       }
                       const cellRefs = processedRefs;
+                      renderDependenciesPaneFromReferences(cellRefs, { formulaText: fullText });
                       const newHighlightAssignments = new Map();
 
                       // Ensure there is always at least one literal space between consecutive chips
@@ -3494,29 +3584,6 @@ export async function initializeApp() {
                       cellChipDecorations = editor.deltaDecorations(cellChipDecorations, decorations);
                       cellChipRanges = newChipRanges;
 
-                      if (incompleteChipCursorLock) {
-                        const lockPosition = new monaco.Position(
-                          incompleteChipCursorLock.lineNumber,
-                          incompleteChipCursorLock.column
-                        );
-                        const lockRange = getChipRangeAtPosition(lockPosition);
-                        if (!lockRange) {
-                          incompleteChipCursorLock = null;
-                        } else {
-                          const currentPosition = editor.getPosition();
-                          const needsMove = !currentPosition ||
-                            currentPosition.lineNumber !== lockPosition.lineNumber ||
-                            currentPosition.column !== lockPosition.column;
-                          if (needsMove) {
-                            window.isProgrammaticCursorChange = true;
-                            editor.setPosition(lockPosition);
-                            Promise.resolve().then(() => {
-                              window.isProgrammaticCursorChange = false;
-                            });
-                          }
-                        }
-                      }
-
                       // Re-evaluate cursor suppression state
                       const currentPosition = editor.getPosition();
                       const inChip = isPositionInsideChip(currentPosition);
@@ -3572,8 +3639,7 @@ export async function initializeApp() {
                         forceMoveMarkers: true
                       }]);
 
-                      const cursorOffset = chipText.endsWith(' ') ? 1 : 0;
-                      const targetColumn = range.startColumn + chipText.length - cursorOffset;
+                      const targetColumn = range.startColumn + chipText.length;
                       currentEditor.setPosition(new monaco.Position(range.startLineNumber, Math.max(1, targetColumn)));
                         newRange = new monaco.Range(
                           range.startLineNumber,
@@ -3877,17 +3943,12 @@ export async function initializeApp() {
                         ]);
                         const lockPosition = new monaco.Position(colonLine, insertColumn + 1);
                         editor.setPosition(lockPosition);
-                        incompleteChipCursorLock = {
-                          lineNumber: colonLine,
-                          column: insertColumn + 1
-                        };
                         Promise.resolve().then(() => {
                           window.isProgrammaticCursorChange = false;
                         });
                         return;
                       }
 
-                      incompleteChipCursorLock = null;
                     });
 
                     // Initial chip update
@@ -3902,107 +3963,127 @@ export async function initializeApp() {
                       // Check each change to see if it's just an opening parenthesis
                       e.changes.forEach(change => {
                         // Only process changes that add text (not deletions)
-                        if (change.text === '(') {
-                          const model = editor.getModel();
-                          if (!model) return;
+                        if (!change.text || !change.text.includes('(')) {
+                          return;
+                        }
 
-                          // Get the line where the change occurred
-                          const changeLine = change.range.startLineNumber;
-                          // Line 1 is now valid - allow all interactions
+                        // When pasting full formulas (which include commas, quotes, etc.), don't auto-expand snippets.
+                        // Only auto-expand when the inserted text consists solely of parentheses/whitespace (i.e. typing "(" or Monaco's "()")
+                        if (!/^[()\s]*$/.test(change.text)) {
+                          return;
+                        }
 
-                          // Get the current line content (after the change - the ( has been inserted)
-                          const currentLine = model.getLineContent(changeLine);
+                        // Find the position of the first "(" within the inserted text
+                        const parenIndexInText = change.text.indexOf('(');
+                        if (parenIndexInText === -1) {
+                          return;
+                        }
 
-                          // Get text before the opening parenthesis that was just inserted
-                          // The ( is at startColumn, so text before it is from 0 to startColumn-1
-                          const textBeforeParen = currentLine.substring(0, change.range.startColumn - 1);
+                        const model = editor.getModel();
+                        if (!model) return;
 
-                          // Don't expand if inside quotes
-                          if (isInsideQuotes(textBeforeParen, textBeforeParen.length)) {
-                            return;
-                          }
+                        // Determine the actual column (1-based) where "(" ended up
+                        const parenColumn = change.range.startColumn + parenIndexInText;
+                        const parenLine = change.range.startLineNumber;
 
-                          // Match a function name immediately before the opening parenthesis
-                          // Pattern: function name followed by optional whitespace and then (
-                          const functionNamePattern = /([A-Za-z_][A-Za-z0-9_]*)\s*$/;
-                          const match = textBeforeParen.match(functionNamePattern);
+                        // Get the current line content (after the change)
+                        const currentLine = model.getLineContent(parenLine);
 
-                          if (match) {
-                            const funcName = match[1];
+                        const parenZeroIndex = Math.max(0, parenColumn - 1);
 
-                            // Check if this matches a function name (case-insensitive)
-                            if (window.hyperFormulaFunctions && window.hyperFormulaFunctions.length > 0) {
-                              const funcNameUpper = funcName.toUpperCase();
-                              const matchingFunction = window.hyperFormulaFunctions.find(func => 
-                                func.name.toUpperCase() === funcNameUpper
+                        // Get text before the opening parenthesis that was just inserted
+                        const textBeforeParen = currentLine.substring(0, parenZeroIndex);
+
+                        // Don't expand if inside quotes
+                        if (isInsideQuotes(textBeforeParen, textBeforeParen.length)) {
+                          return;
+                        }
+
+                        // Match a function name immediately before the opening parenthesis
+                        // Pattern: function name followed by optional whitespace and then (
+                        const functionNamePattern = /([A-Za-z_][A-Za-z0-9_]*)\s*$/;
+                        const match = textBeforeParen.match(functionNamePattern);
+
+                        if (match) {
+                          const funcName = match[1];
+
+                          // Check if this matches a function name (case-insensitive)
+                          if (window.hyperFormulaFunctions && window.hyperFormulaFunctions.length > 0) {
+                            const funcNameUpper = funcName.toUpperCase();
+                            const matchingFunction = window.hyperFormulaFunctions.find(func =>
+                              func.name.toUpperCase() === funcNameUpper
+                            );
+
+                            if (matchingFunction) {
+                              // Don't expand if it's already a snippet (check if there's already placeholders after the paren)
+                              const textAfterParen = currentLine.substring(parenZeroIndex + 1);
+                              if (textAfterParen.includes('${') || textAfterParen.includes('$1')) {
+                                return; // Already expanded
+                              }
+
+                              // Also check if the function name + ( is already part of a snippet
+                              const funcStartZeroIndex = Math.max(0, parenZeroIndex - funcName.length);
+                              const textWithFuncAndParen = currentLine.substring(
+                                funcStartZeroIndex,
+                                Math.min(currentLine.length, parenZeroIndex + change.text.length)
+                              );
+                              if (textWithFuncAndParen.includes('${')) {
+                                return; // Already part of a snippet
+                              }
+
+                              // Check that it's not a cell reference (like A1() - though unlikely)
+                              const isCellReference = /^[A-Z]{1,3}\$?\d+\$?$/i.test(funcName);
+                              if (isCellReference) {
+                                return; // Don't expand cell references
+                              }
+
+                              // Found a matching function - expand to snippet
+                              const snippetTemplate = createFunctionSnippet(matchingFunction);
+                              if (!snippetTemplate) {
+                                return;
+                              }
+
+                              // Calculate the range: from start of function name to after the opening paren (and optional auto-close ))
+                              const funcNameStartCol = parenColumn - funcName.length;
+                              let funcNameEndCol = parenColumn + 1; // include the opening parenthesis
+
+                              const insertedClosingIndex = change.text.indexOf(')');
+                              if (insertedClosingIndex !== -1) {
+                                const closingColumn = change.range.startColumn + insertedClosingIndex + 1;
+                                funcNameEndCol = Math.max(funcNameEndCol, closingColumn);
+                              } else {
+                                const charAfterParen = currentLine.charAt(parenZeroIndex + 1);
+                                if (charAfterParen === ')') {
+                                  funcNameEndCol = Math.max(funcNameEndCol, parenColumn + 2);
+                                }
+                              }
+
+                              const replaceRange = new monaco.Range(
+                                parenLine,
+                                funcNameStartCol,
+                                parenLine,
+                                funcNameEndCol
                               );
 
-                              if (matchingFunction) {
-                                // Don't expand if it's already a snippet (check if there's already placeholders after the paren)
-                                const textAfterParen = currentLine.substring(change.range.endColumn - 1);
-                                if (textAfterParen.includes('${') || textAfterParen.includes('$1')) {
-                                  return; // Already expanded
+                              // Use snippet controller to insert the snippet
+                              window.isProgrammaticCursorChange = true;
+
+                              try {
+                                const snippetController = editor.getContribution('snippetController2');
+                                if (snippetController) {
+                                  editor.setSelection(replaceRange);
+                                  snippetController.insert(snippetTemplate);
+                                  console.log('Auto-expanded function snippet:', matchingFunction.name);
+                                } else {
+                                  throw new Error('SnippetController2 not available');
                                 }
-
-                                // Also check if the function name + ( is already part of a snippet
-                                // (e.g., if user already typed IF(${1:...))
-                                const textWithFuncAndParen = currentLine.substring(
-                                  change.range.startColumn - funcName.length - 1,
-                                  change.range.endColumn
-                                );
-                                if (textWithFuncAndParen.includes('${')) {
-                                  return; // Already part of a snippet
-                                }
-
-                                // Check that it's not a cell reference (like A1() - though unlikely)
-                                const isCellReference = /^[A-Z]{1,3}\$?\d+\$?$/i.test(funcName);
-                                if (isCellReference) {
-                                  return; // Don't expand cell references
-                                }
-
-                                // Found a matching function - expand to snippet
-                                // We need to replace "FUNCTION_NAME(" with the full snippet
-                                const snippetTemplate = createFunctionSnippet(matchingFunction);
-                                if (!snippetTemplate) {
-                                  return;
-                                }
-
-                                // Calculate the range: from start of function name to after the opening paren
-                                const funcNameStartCol = change.range.startColumn - funcName.length;
-                                const funcNameEndCol = change.range.endColumn; // After the (
-
-                                const replaceRange = new monaco.Range(
-                                  changeLine,
-                                  funcNameStartCol,
-                                  changeLine,
-                                  funcNameEndCol
-                                );
-
-                                // Use snippet controller to insert the snippet
-                                // This will properly activate snippet mode
-                                window.isProgrammaticCursorChange = true;
-
-                                try {
-                                  const snippetController = editor.getContribution('snippetController2');
-                                  if (snippetController) {
-                                    // Set selection to the function name + (
-                                    editor.setSelection(replaceRange);
-                                    // Insert the snippet - this will replace the selection
-                                    snippetController.insert(snippetTemplate);
-                                    console.log('Auto-expanded function snippet:', matchingFunction.name);
-                                  } else {
-                                    throw new Error('SnippetController2 not available');
-                                  }
-                                } catch (e) {
-                                  console.error('Failed to auto-expand snippet:', e);
-                                  // Fallback: just leave it as is
-                                }
-
-                                // Reset flag after a microtask
-                                Promise.resolve().then(() => {
-                                  window.isProgrammaticCursorChange = false;
-                                });
+                              } catch (e) {
+                                console.error('Failed to auto-expand snippet:', e);
                               }
+
+                              Promise.resolve().then(() => {
+                                window.isProgrammaticCursorChange = false;
+                              });
                             }
                           }
                         }
@@ -4218,12 +4299,8 @@ export async function initializeApp() {
               if (hasInitialText) {
                 editorValue = (options.initialText || "").toString();
               } else {
-                const storedFormula = cell.getAttribute("data-formula") || "";
-                if (storedFormula && storedFormula.startsWith("=")) {
-                  editorValue = storedFormula.substring(1);
-                } else if (storedFormula) {
-                  editorValue = storedFormula;
-                } else if (cellRef && window.hf) {
+                editorValue = getStoredFormulaText(cell) || "";
+                if (!editorValue && cellRef && window.hf) {
                   const address = cellRefToAddress(cellRef);
                   if (address) {
                     const [row, col] = address;
@@ -4625,8 +4702,34 @@ export async function initializeApp() {
             return `="${escapedValue}"`;
           }
 
+          function getRawFormulaStoreKey(cellRef, sheetId = getActiveSheetId()) {
+            return `${sheetId}:${cellRef}`;
+          }
+
+          function saveRawFormula(cellRef, rawFormula, sheetId = getActiveSheetId()) {
+            if (!cellRef) {
+              return;
+            }
+            const key = getRawFormulaStoreKey(cellRef, sheetId);
+            const hasContent = typeof rawFormula === "string" && rawFormula.trim().length > 0;
+            if (hasContent) {
+              rawFormulaStore.set(key, rawFormula);
+            } else {
+              rawFormulaStore.delete(key);
+            }
+          }
+
+          function readRawFormula(cellRef, sheetId = getActiveSheetId()) {
+            if (!cellRef) {
+              return "";
+            }
+            const key = getRawFormulaStoreKey(cellRef, sheetId);
+            const stored = rawFormulaStore.get(key);
+            return typeof stored === "string" ? stored : "";
+          }
+
           // Function to set cell value in HyperFormula and update display
-          function setCellValue(cellRef, value) {
+          function setCellValue(cellRef, value, options = {}) {
             if (!window.hf) {
               console.warn("HyperFormula not initialized");
               return;
@@ -4647,13 +4750,29 @@ export async function initializeApp() {
               // Strip comments from formula before storing and executing
               // Comments are already stripped in Ctrl+Enter handler, but this ensures
               // comments are removed even if setCellValue is called directly
-              let formulaToStore = stripComments(value);
+            const formulaForHyperFormula = stripComments(value);
+            console.log(`[HyperFormula Formula] ${formulaForHyperFormula || ''}`);
 
               // Set the value in HyperFormula - address object uses col, row, sheet order
-              window.hf.setCellContents({ col, row, sheet: sheetId }, [[formulaToStore]]);
+            const hfResponse = window.hf.setCellContents({ col, row, sheet: sheetId }, [[formulaForHyperFormula]]);
+              console.log('[HyperFormula Response]', { cellRef, response: hfResponse });
 
               // Recalculate to execute formulas - HyperFormula automatically recalculates dependencies
               window.hf.rebuildAndRecalculate();
+
+              try {
+                const evaluatedValue = window.hf.getCellValue({ col, row, sheet: sheetId });
+                console.log('[HyperFormula Value]', { cellRef, value: evaluatedValue });
+              } catch (valueError) {
+                console.warn('[HyperFormula Value Error]', { cellRef, error: valueError });
+              }
+
+              const rawFormulaToPersist = options.rawFormula !== undefined ? options.rawFormula : value;
+              if (rawFormulaToPersist !== undefined) {
+                saveRawFormula(cellRef, rawFormulaToPersist, sheetId);
+              } else if (!value) {
+                saveRawFormula(cellRef, "", sheetId);
+              }
 
               // Update the changed cell's display
               updateCellDisplay(cellRef);
@@ -4661,7 +4780,7 @@ export async function initializeApp() {
               // Store the formula text (with "=" prefix) in data attribute for later retrieval
               const cell = gridBody.querySelector(`td[data-ref="${cellRef}"]`);
               if (cell) {
-                cell.setAttribute("data-formula", formulaToStore);
+                cell.setAttribute("data-formula", formulaForHyperFormula);
               }
 
               // Find and update all dependent cells
@@ -4759,7 +4878,7 @@ export async function initializeApp() {
             selectedCells.forEach((cell) => {
               const cellRef = cell.getAttribute("data-ref");
               if (cellRef) {
-                setCellValue(cellRef, "");
+                setCellValue(cellRef, "", { rawFormula: "" });
                 cell.removeAttribute("data-formula");
                 clearedAny = true;
               }
@@ -4955,7 +5074,7 @@ export async function initializeApp() {
                 targetRows.forEach((targetRow, index) => {
                   const valueToSet = fillValues[index] ?? "";
                   const targetRef = addressToCellRef(targetRow, col);
-                  setCellValue(targetRef, valueToSet);
+                  setCellValue(targetRef, valueToSet, { rawFormula: valueToSet });
                 });
               } else {
                 targetRows.forEach((targetRow) => {
@@ -4968,7 +5087,7 @@ export async function initializeApp() {
                     nextValue = adjustFormulaReferences(nextValue, rowDelta, 0);
                   }
                   const targetRef = addressToCellRef(targetRow, col);
-                  setCellValue(targetRef, nextValue);
+                  setCellValue(targetRef, nextValue, { rawFormula: nextValue });
                 });
               }
             }
@@ -5003,7 +5122,7 @@ export async function initializeApp() {
                 targetCols.forEach((targetCol, index) => {
                   const valueToSet = fillValues[index] ?? "";
                   const targetRef = addressToCellRef(row, targetCol);
-                  setCellValue(targetRef, valueToSet);
+                  setCellValue(targetRef, valueToSet, { rawFormula: valueToSet });
                 });
               } else {
                 targetCols.forEach((targetCol) => {
@@ -5016,7 +5135,7 @@ export async function initializeApp() {
                     nextValue = adjustFormulaReferences(nextValue, 0, colDelta);
                   }
                   const targetRef = addressToCellRef(row, targetCol);
-                  setCellValue(targetRef, nextValue);
+                  setCellValue(targetRef, nextValue, { rawFormula: nextValue });
                 });
               }
             }
@@ -5033,7 +5152,7 @@ export async function initializeApp() {
             if (event.button !== 0) {
               return;
             }
-            if (isEditMode || isFormulaSelecting) {
+            if (isEditMode) {
               return;
             }
             const bounds = getSelectionBounds();
@@ -5047,7 +5166,6 @@ export async function initializeApp() {
               axis: null,
               targetRange: null
             };
-            document.body.style.userSelect = "none";
             document.addEventListener("mousemove", handleFillHandleMouseMove);
             document.addEventListener("mouseup", handleFillHandleMouseUp);
           }
@@ -5083,7 +5201,6 @@ export async function initializeApp() {
             }
             document.removeEventListener("mousemove", handleFillHandleMouseMove);
             document.removeEventListener("mouseup", handleFillHandleMouseUp);
-            document.body.style.userSelect = "";
             const { bounds, targetRange } = fillHandleDragState;
             fillHandleDragState = null;
             clearFillPreview();
@@ -5133,7 +5250,7 @@ export async function initializeApp() {
               rowValues.forEach((rawValue, colIndex) => {
                 const targetRef = addressToCellRef(startRow + rowIndex, startCol + colIndex);
                 const normalizedValue = normalizeValueForCell(rawValue);
-                setCellValue(targetRef, normalizedValue);
+                setCellValue(targetRef, normalizedValue, { rawFormula: normalizedValue });
               });
             });
           }
@@ -5382,7 +5499,6 @@ export async function initializeApp() {
                 selectionDragState.colOffset = startCol - bounds.minCol;
               }
             }
-            document.body.style.userSelect = "none";
             document.body.style.cursor = "grabbing";
             showSelectionDragPreview(bounds);
             document.addEventListener("mousemove", handleSelectionDragMove);
@@ -5443,7 +5559,6 @@ export async function initializeApp() {
             }
             document.removeEventListener("mousemove", handleSelectionDragMove);
             document.removeEventListener("mouseup", handleSelectionDragEnd);
-            document.body.style.userSelect = "";
             document.body.style.cursor = "";
             if (selectionOverlayElement) {
               selectionOverlayElement.style.pointerEvents = selectionDragState.overlayPointerEvents || "";
@@ -5575,11 +5690,17 @@ export async function initializeApp() {
                     if (cellFormula) {
                       editorValue = cellFormula.startsWith("=") ? cellFormula.substring(1) : cellFormula;
                       cell.setAttribute("data-formula", cellFormula);
+                      if (cellRef && !readRawFormula(cellRef, sheetId)) {
+                        saveRawFormula(cellRef, cellFormula, sheetId);
+                      }
                     } else {
                       const cellValue = window.hf.getCellValue({ col, row, sheet: sheetId });
                       if (cellValue !== null && cellValue !== undefined) {
                         editorValue = cellValue.toString();
                         cell.setAttribute("data-formula", editorValue);
+                        if (cellRef && !readRawFormula(cellRef, sheetId)) {
+                          saveRawFormula(cellRef, editorValue, sheetId);
+                        }
                       } else {
                         cell.removeAttribute("data-formula");
                       }
@@ -5690,15 +5811,40 @@ export async function initializeApp() {
             if (firstCell) {
               const isHeader = firstCell.tagName === "TH" || firstCell === firstCell.parentElement.querySelector("td:first-child");
               if (!isHeader) {
-                // Get the stored formula from data attribute (with "=" prefix)
-                const storedFormula = firstCell.getAttribute("data-formula") || "";
-
-                // Strip "=" prefix when displaying in editor
-                let editorValue = "";
-                if (storedFormula && storedFormula.startsWith("=")) {
-                  editorValue = storedFormula.substring(1);
-                } else if (storedFormula) {
-                  editorValue = storedFormula;
+                let editorValue = getStoredFormulaText(firstCell) || "";
+                if (!editorValue) {
+                  const cellRefForRange = firstCell.getAttribute("data-ref");
+                  if (cellRefForRange && window.hf) {
+                    const address = cellRefToAddress(cellRefForRange);
+                    if (address) {
+                      const [row, col] = address;
+                      const sheetId = typeof window.hfSheetId === "number" ? window.hfSheetId : 0;
+                      try {
+                        const cellFormula = window.hf.getCellFormula({ col, row, sheet: sheetId });
+                        if (cellFormula) {
+                          editorValue = cellFormula.startsWith("=") ? cellFormula.substring(1) : cellFormula;
+                          const formulaToStore = cellFormula.startsWith("=") ? cellFormula : `=${cellFormula}`;
+                          firstCell.setAttribute("data-formula", formulaToStore);
+                          if (cellRefForRange && !readRawFormula(cellRefForRange, sheetId)) {
+                            saveRawFormula(cellRefForRange, formulaToStore, sheetId);
+                          }
+                        } else {
+                          const cellValue = window.hf.getCellValue({ col, row, sheet: sheetId });
+                          if (cellValue !== null && cellValue !== undefined) {
+                            editorValue = cellValue.toString();
+                            firstCell.setAttribute("data-formula", editorValue);
+                            if (cellRefForRange && !readRawFormula(cellRefForRange, sheetId)) {
+                              saveRawFormula(cellRefForRange, editorValue, sheetId);
+                            }
+                          } else {
+                            firstCell.removeAttribute("data-formula");
+                          }
+                        }
+                      } catch (rangeError) {
+                        console.error("Failed to hydrate formula for selection range:", rangeError);
+                      }
+                    }
+                  }
                 }
 
                 const currentEditor = window.monacoEditor || editor;
@@ -5759,14 +5905,20 @@ export async function initializeApp() {
             updateCellRangePill();
           }
 
-          function enterSelectionModeAndSelectCell(targetCell) {
+          function enterSelectionModeAndSelectCell(targetCell, options = {}) {
             if (!targetCell) return;
-            const previouslyEditingCell = currentMode !== MODES.READY ? window.selectedCell : null;
+            const forceExit = options.forceExit === true;
+            if (!forceExit && currentMode === MODES.EDIT) {
+              return;
+            }
+
+            const wasEditing = currentMode !== MODES.READY;
+            if (forceExit || wasEditing) {
+              const previouslyEditingCell = wasEditing ? window.selectedCell : null;
             setMode(MODES.READY);
             if (previouslyEditingCell) {
               clearEditingCellDisplayOverride(previouslyEditingCell);
             }
-            cancelFormulaSelection();
 
             const editorWrapper = document.querySelector('.editor-wrapper');
             if (editorWrapper) {
@@ -5781,6 +5933,7 @@ export async function initializeApp() {
               });
               blurMonacoEditor(currentEditor);
               currentEditor.render(true);
+              }
             }
 
             if (typeof updateSelectionOverlay === 'function') {
@@ -5844,68 +5997,44 @@ export async function initializeApp() {
             // Only update formula editor for data cells (not headers)
             const isHeader = cell.tagName === "TH" || cell === cell.parentElement.querySelector("td:first-child");
             if (!isHeader) {
-              // Get the stored formula from data attribute (with "=" prefix)
-              let storedFormula = cell.getAttribute("data-formula");
-
-              // Strip "=" prefix when displaying in editor
-              let editorValue = "";
-
-              // If we have a stored formula, use it
-              if (storedFormula) {
-                if (storedFormula.startsWith("=")) {
-                  editorValue = storedFormula.substring(1);
-                } else {
-                  editorValue = storedFormula;
-                }
-              } else {
-                // If no stored formula in data attribute, check HyperFormula
+              let editorValue = getStoredFormulaText(cell) || "";
+              if (!editorValue) {
                 const cellRef = cell.getAttribute("data-ref");
                 if (cellRef && window.hf) {
                   const address = cellRefToAddress(cellRef);
                   if (address) {
                     const [row, col] = address;
-                    const sheetId = 0;
-                    // First, try to get the formula (this will throw if cell has no formula)
+                    const sheetId = typeof window.hfSheetId === "number" ? window.hfSheetId : 0;
                     let hasFormula = false;
                     try {
                       const cellFormula = window.hf.getCellFormula({ col, row, sheet: sheetId });
                       if (cellFormula) {
-                        // Cell has a formula
                         hasFormula = true;
-                        // HyperFormula returns formula with "=" prefix
-                        if (cellFormula.startsWith("=")) {
-                          editorValue = cellFormula.substring(1);
-                        } else {
-                          editorValue = cellFormula;
-                        }
-                        // Store the formula (with "=" prefix) in data attribute for future reference
-                        const formulaToStore = cellFormula.startsWith("=") ? cellFormula : "=" + cellFormula;
+                        editorValue = cellFormula.startsWith("=") ? cellFormula.substring(1) : cellFormula;
+                        const formulaToStore = cellFormula.startsWith("=") ? cellFormula : `=${cellFormula}`;
                         cell.setAttribute("data-formula", formulaToStore);
+                        if (cellRef && !readRawFormula(cellRef, sheetId)) {
+                          saveRawFormula(cellRef, formulaToStore, sheetId);
+                        }
                       }
                     } catch (formulaError) {
-                      // getCellFormula throws an error if cell doesn't have a formula
-                      // This is expected for cells with values, not an actual error
                       hasFormula = false;
                     }
 
-                    // If cell doesn't have a formula, try to get the value
                     if (!hasFormula) {
                       try {
                         const cellValue = window.hf.getCellValue({ col, row, sheet: sheetId });
                         if (cellValue !== null && cellValue !== undefined && cellValue !== "") {
-                          // Cell has a value (not a formula)
                           editorValue = cellValue.toString();
-                          // Store the value (without "=" prefix) in data attribute
-                          // This distinguishes it from formulas which have "=" prefix
-                          cell.setAttribute("data-formula", cellValue.toString());
+                          cell.setAttribute("data-formula", editorValue);
+                          if (cellRef && !readRawFormula(cellRef, sheetId)) {
+                            saveRawFormula(cellRef, editorValue, sheetId);
+                          }
                         } else {
-                          // Cell is empty
                           editorValue = "";
-                          // Clear data-formula attribute for empty cells
                           cell.removeAttribute("data-formula");
                         }
                       } catch (valueError) {
-                        // If getCellValue also fails, cell is empty
                         editorValue = "";
                         cell.removeAttribute("data-formula");
                       }
@@ -5999,10 +6128,6 @@ export async function initializeApp() {
             if (isSelecting) {
               isSelecting = false;
               selectionStart = null;
-              document.body.style.userSelect = "";
-            }
-            if (isFormulaSelecting) {
-              finalizeFormulaSelectionIfNeeded();
             }
           });
 
@@ -6015,8 +6140,7 @@ export async function initializeApp() {
           };
 
           const editingCommitMap = (shiftKey) => ({
-            Enter: { row: shiftKey ? -1 : 1, col: 0 },
-            Tab: { row: 0, col: shiftKey ? -1 : 1 }
+            Enter: { row: shiftKey ? -1 : 1, col: 0 }
           });
 
           const editingNavigationMap = {
@@ -6026,54 +6150,20 @@ export async function initializeApp() {
             ArrowRight: { row: 0, col: 1 }
           };
 
-          function handleEnterModePointerNavigation(event) {
-            if (!event) {
+          function handleEnterModePointerNavigation() {
               return false;
-            }
-            const navigationMove = editingNavigationMap[event.key];
-            if (!navigationMove) {
-              return false;
-            }
-            if (event.ctrlKey || event.metaKey || event.altKey) {
-              return false;
-            }
-            const currentEditor = window.monacoEditor || editor;
-            const pointerNavigationAllowed = currentMode === MODES.ENTER
-              || isEditModePointerNavigationAllowed(currentEditor);
-            if (!pointerNavigationAllowed) {
-              return false;
-            }
-            const extendRange = !!event.shiftKey;
-            const pointerStartRef = getCurrentPointerReference(currentEditor);
-            const pointerResult = moveEnterModePointer(navigationMove.row, navigationMove.col);
-            if (!pointerResult || !pointerResult.reference) {
-              return false;
-            }
-            event.preventDefault();
-            if (typeof event.stopImmediatePropagation === 'function') {
-              event.stopImmediatePropagation();
-            }
-            event.stopPropagation();
-            if (extendRange) {
-              if (!enterModePointerState.rangeAnchorRef) {
-                enterModePointerState.rangeAnchorRef = pointerStartRef || pointerResult.reference;
-              }
-              const anchorRef = enterModePointerState.rangeAnchorRef || pointerResult.reference;
-              const rangeReference = buildRangeReference(anchorRef, pointerResult.reference);
-              if (rangeReference) {
-                applyReferenceToFormula(rangeReference);
-              }
-              updateEditModeRangeHighlight(anchorRef, pointerResult.reference);
-            } else {
-              enterModePointerState.rangeAnchorRef = pointerResult.reference;
-              clearEditModeRangeHighlight();
-              applyReferenceToFormula(pointerResult.reference);
-            }
-            return true;
           }
 
           function getStoredFormulaText(cell) {
             if (!cell) return "";
+            const cellRef = cell.getAttribute("data-ref");
+            const sheetId = getActiveSheetId();
+            if (cellRef) {
+              const rawFormula = readRawFormula(cellRef, sheetId);
+              if (rawFormula) {
+                return rawFormula.startsWith("=") ? rawFormula.substring(1) : rawFormula;
+              }
+            }
             const storedFormula = cell.getAttribute("data-formula") || "";
             if (storedFormula && storedFormula.startsWith("=")) {
               return storedFormula.substring(1);
@@ -6098,7 +6188,7 @@ export async function initializeApp() {
             }
             clearEditingCellDisplayOverride(editingCell);
             setMode(MODES.READY);
-            enterSelectionModeAndSelectCell(editingCell);
+            enterSelectionModeAndSelectCell(editingCell, { forceExit: true });
           }
 
           function getNormalizedEditorValue() {
@@ -6110,6 +6200,26 @@ export async function initializeApp() {
             return stripComments(allLines.join('\n')).trim();
           }
 
+          function getRawEditorValue() {
+            const currentEditor = window.monacoEditor || editor;
+            if (!currentEditor || typeof currentEditor.getValue !== 'function') {
+              return "";
+            }
+            const fullValue = currentEditor.getValue();
+            if (typeof fullValue !== "string" || fullValue.length === 0) {
+              return "";
+            }
+            const lines = fullValue.split('\n');
+            let lastContentIndex = lines.length - 1;
+            while (lastContentIndex >= 0 && lines[lastContentIndex].trim().length === 0) {
+              lastContentIndex--;
+            }
+            if (lastContentIndex < 0) {
+              return "";
+            }
+            return lines.slice(0, lastContentIndex + 1).join('\n');
+          }
+
           function commitEditorChanges(moveDelta = null) {
             if (!window.selectedCell) return false;
             const cell = window.selectedCell;
@@ -6117,20 +6227,21 @@ export async function initializeApp() {
             if (!cellRef) return false;
             cancelFormulaSelection();
             let formula = getNormalizedEditorValue();
+            const rawFormulaInput = getRawEditorValue();
             if (formula) {
               if (!formula.startsWith("=")) {
                 formula = "=" + formula;
               }
-              setCellValue(cellRef, formula);
+              setCellValue(cellRef, formula, { rawFormula: rawFormulaInput });
             } else {
-              setCellValue(cellRef, "");
+              setCellValue(cellRef, "", { rawFormula: "" });
             }
             clearEditingCellDisplayOverride(cell);
             setMode(MODES.READY);
             if (moveDelta) {
               moveSelectionBy(moveDelta.row, moveDelta.col, false);
             } else {
-              enterSelectionModeAndSelectCell(cell);
+              enterSelectionModeAndSelectCell(cell, { forceExit: true });
             }
             return true;
           }
@@ -6163,7 +6274,7 @@ export async function initializeApp() {
             const isRedoShortcut = isModifierCombo && ((keyLower === 'y' && !e.shiftKey) || (keyLower === 'z' && e.shiftKey));
 
             if ((isUndoShortcut || isRedoShortcut) && !isExternalTextInputFocused) {
-              if (currentMode === MODES.READY && !isEditorFocused && !isFormulaSelecting) {
+              if (currentMode === MODES.READY && !isEditorFocused) {
                 e.preventDefault();
                 handleUndoRedoAction(isUndoShortcut ? 'undo' : 'redo');
                 return;
@@ -6254,15 +6365,13 @@ export async function initializeApp() {
               }
             }
 
-            if (currentMode === MODES.ENTER || currentMode === MODES.EDIT) {
+            if ((currentMode === MODES.ENTER || currentMode === MODES.EDIT) && !isEditorFocused) {
               if (!(e.ctrlKey || e.metaKey)) {
                 const commitMap = editingCommitMap(e.shiftKey);
                 if (commitMap[e.key]) {
-                  if (isEditorFocused) {
-                    return;
-                  }
                   e.preventDefault();
                   commitEditorChanges(commitMap[e.key]);
+                  suppressNextDocumentEnter = true;
                   return;
                 }
               }
@@ -6288,36 +6397,11 @@ export async function initializeApp() {
             return startRow === endRow && startCol === endCol ? refStart : `${refStart}:${refEnd}`;
           }
 
-          function handleFormulaSelectionStart(cell, event) {
-            const currentEditor = window.monacoEditor || editor;
-            if (!currentEditor) return;
-            if (event.button !== 0) return;
-            event.preventDefault();
-            event.stopPropagation();
-            isFormulaSelecting = true;
-            formulaSelectionStartCell = cell;
-            formulaSelectionCurrentCell = cell;
-            document.body.style.userSelect = "none";
-            if (typeof currentEditor.focus === 'function') {
-              currentEditor.focus();
-            }
-          }
+          function handleFormulaSelectionStart() {}
 
-          function handleFormulaSelectionHover(cell) {
-            if (!isFormulaSelecting || !formulaSelectionStartCell) return;
-            formulaSelectionCurrentCell = cell;
-          }
+          function handleFormulaSelectionHover() {}
 
-          function finalizeFormulaSelectionIfNeeded() {
-            if (!isFormulaSelecting || !formulaSelectionStartCell) return;
-            const endCell = formulaSelectionCurrentCell || formulaSelectionStartCell;
-            const reference = createReferenceFromCells(formulaSelectionStartCell, endCell);
-            cancelFormulaSelection();
-            if (reference) {
-              applyReferenceToFormula(reference);
-              armEditModePointerNavigation(reference);
-            }
-          }
+          function finalizeFormulaSelectionIfNeeded() {}
 
           function buildGrid(rows = 150, columns = 50) {
             console.log("buildGrid function called with rows:", rows, "columns:", columns);
@@ -6375,7 +6459,6 @@ export async function initializeApp() {
                     startWidth: th.offsetWidth
                   };
                   document.body.style.cursor = "col-resize";
-                  document.body.style.userSelect = "none";
                   e.preventDefault();
                   e.stopPropagation();
                   e.stopImmediatePropagation();
@@ -6472,7 +6555,6 @@ export async function initializeApp() {
                   }, 100);
                   window.gridColumnResizing.current = null;
                   document.body.style.cursor = "";
-                  document.body.style.userSelect = "";
                 }
               };
 
@@ -6544,7 +6626,6 @@ export async function initializeApp() {
                   }, 100);
                   window.gridRowResizing.current = null;
                   document.body.style.cursor = "";
-                  document.body.style.userSelect = "";
                 }
               };
 
@@ -6577,7 +6658,6 @@ export async function initializeApp() {
                     startHeight: rowElement.offsetHeight
                   };
                   document.body.style.cursor = "row-resize";
-                  document.body.style.userSelect = "none";
                   e.preventDefault();
                   e.stopPropagation();
                   e.stopImmediatePropagation();
@@ -6633,10 +6713,6 @@ export async function initializeApp() {
 
                 // Handle drag selection
                 cell.addEventListener("mousedown", (e) => {
-                  if (isEditMode) {
-                    handleFormulaSelectionStart(cell, e);
-                    return;
-                  }
                   // Don't start selection if resizing
                   if (window.gridColumnResizing.current || window.gridRowResizing.current) {
                     return;
@@ -6650,15 +6726,10 @@ export async function initializeApp() {
                   isSelecting = true;
                   selectionStart = cell;
                   selectCell(cell);
-                  document.body.style.userSelect = "none";
                   e.preventDefault();
                 });
 
                 cell.addEventListener("mouseenter", (e) => {
-                  if (isFormulaSelecting && formulaSelectionStartCell) {
-                    handleFormulaSelectionHover(cell);
-                    return;
-                  }
                   if (isSelecting && selectionStart) {
                     selectRange(selectionStart, cell);
                   }
@@ -6669,10 +6740,6 @@ export async function initializeApp() {
                   if (currentMode !== MODES.READY) {
                     e.preventDefault();
                     e.stopPropagation();
-                    return;
-                  }
-                  if (isFormulaSelecting) {
-                    e.preventDefault();
                     return;
                   }
                   if (isSelecting) {

@@ -998,7 +998,7 @@ export const hyperFormulaFunctions = [
   },
   {
     "name": "INDEX",
-    "signature": "INDEX(range, number, number)",
+    "signature": "INDEX(range, [number], [number])",
     "description": ""
   },
   {

@@ -4,7 +4,8 @@ import * as fs from 'fs';
 
 // Initialize HyperFormula
 const hf = HyperFormula.buildEmpty({
-  licenseKey: 'gpl-v3'
+  licenseKey: 'gpl-v3',
+  useArrayArithmetic: true
 });
 
 // Access the function registry through the instance
