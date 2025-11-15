@@ -87,6 +87,12 @@ export async function initializeApp() {
         const sidebarElement = document.querySelector(".sidebar");
         const sidebarToggleButton = document.getElementById("sidebarCollapseToggle");
         const sheetTabsBarElement = document.getElementById("sheetTabsBar");
+          const editorStatusBarElement = document.getElementById("editorStatusBar");
+          const editorStatusLineElement = document.getElementById("editorStatusLine");
+          const editorStatusColumnElement = document.getElementById("editorStatusColumn");
+
+          window.monacoEditor = null;
+          let editor = null;
 
         function updateSidebarToggleState(isCollapsed) {
           if (!sidebarToggleButton) {
@@ -285,8 +291,15 @@ export async function initializeApp() {
             pointerRow: null,
             pointerCol: null,
             anchorCellRef: null,
-            activeChipRange: null
+            activeChipRange: null,
+            rangeAnchorRef: null
           };
+          const editModeRangeHighlight = {
+            active: false,
+            bounds: null
+          };
+          let editModePointerArmed = false;
+          const POINTER_NAV_SEPARATOR_REGEX = /[ ,()+\-*/^]/;
           const ENTER_MODE_POINTER_BREAK_REGEX = /[\s,+\-*/^()]/;
 
           function resetEnterModePointerState() {
@@ -295,6 +308,8 @@ export async function initializeApp() {
             enterModePointerState.pointerCol = null;
             enterModePointerState.anchorCellRef = null;
             enterModePointerState.activeChipRange = null;
+            enterModePointerState.rangeAnchorRef = null;
+            clearEditModeRangeHighlight();
           }
 
           function initializeEnterModePointerState(cell) {
@@ -313,6 +328,8 @@ export async function initializeApp() {
             enterModePointerState.pointerCol = col;
             enterModePointerState.anchorCellRef = cell.getAttribute("data-ref") || null;
             enterModePointerState.activeChipRange = null;
+            enterModePointerState.rangeAnchorRef = null;
+            clearEditModeRangeHighlight();
           }
 
           function alignPointerWithAnchorCell() {
@@ -444,17 +461,202 @@ export async function initializeApp() {
               col: targetCol
             };
           }
+
+          function getChipReferenceAtCursor(editorInstance) {
+            if (!editorInstance || typeof editorInstance.getPosition !== 'function' || typeof editorInstance.getModel !== 'function') {
+              return null;
+            }
+            const position = editorInstance.getPosition();
+            if (!position) {
+              return null;
+            }
+            const chipRange = getChipRangeAtPosition(position);
+            if (!chipRange) {
+              return null;
+            }
+            const model = editorInstance.getModel();
+            if (!model || typeof model.getValueInRange !== 'function') {
+              return null;
+            }
+            const chipValue = model.getValueInRange(chipRange);
+            return chipValue ? chipValue.trim() : null;
+          }
+
+          function isCursorOnCellChip(editorInstance) {
+            return !!getChipReferenceAtCursor(editorInstance);
+          }
+
+          function armEditModePointerNavigation(anchorRef = null) {
+            if (currentMode !== MODES.EDIT) {
+              return;
+            }
+            editModePointerArmed = true;
+            if (anchorRef) {
+              enterModePointerState.rangeAnchorRef = anchorRef;
+            }
+          }
+
+          function disarmEditModePointerNavigation() {
+            if (!editModePointerArmed && !editModeRangeHighlight.active) {
+              return;
+            }
+            editModePointerArmed = false;
+            enterModePointerState.rangeAnchorRef = null;
+            clearEditModeRangeHighlight();
+          }
+
+          function isEditModePointerNavigationAllowed(editorInstance) {
+            if (currentMode !== MODES.EDIT) {
+              return false;
+            }
+            const onChip = isCursorOnCellChip(editorInstance);
+            if (onChip) {
+              editModePointerArmed = true;
+              return true;
+            }
+            return editModePointerArmed;
+          }
+
+          function getCurrentPointerReference(editorInstance = null) {
+            const chipRef = editorInstance ? getChipReferenceAtCursor(editorInstance) : null;
+            if (chipRef) {
+              return chipRef;
+            }
+            if (!enterModePointerState.active) {
+              const anchorCell = window.selectedCell || null;
+              return anchorCell ? anchorCell.getAttribute("data-ref") : null;
+            }
+            if (typeof enterModePointerState.pointerRow === 'number' && typeof enterModePointerState.pointerCol === 'number') {
+              return addressToCellRef(enterModePointerState.pointerRow, enterModePointerState.pointerCol);
+            }
+            return enterModePointerState.anchorCellRef || (window.selectedCell ? window.selectedCell.getAttribute("data-ref") : null);
+          }
+
+          function buildRangeReference(startRef, endRef) {
+            if (!startRef && !endRef) {
+              return "";
+            }
+            if (!startRef) {
+              return endRef || "";
+            }
+            if (!endRef) {
+              return startRef || "";
+            }
+            if (startRef === endRef) {
+              return startRef;
+            }
+            const startAddress = cellRefToAddress(startRef);
+            const endAddress = cellRefToAddress(endRef);
+            if (!startAddress || !endAddress) {
+              return endRef;
+            }
+            const minRow = Math.min(startAddress[0], endAddress[0]);
+            const maxRow = Math.max(startAddress[0], endAddress[0]);
+            const minCol = Math.min(startAddress[1], endAddress[1]);
+            const maxCol = Math.max(startAddress[1], endAddress[1]);
+            const normalizedStart = addressToCellRef(minRow, minCol);
+            const normalizedEnd = addressToCellRef(maxRow, maxCol);
+            if (!normalizedStart || !normalizedEnd) {
+              return endRef;
+            }
+            return `${normalizedStart}:${normalizedEnd}`;
+          }
+
+          function computeBoundsFromCellRefs(startRef, endRef) {
+            if (!startRef || !endRef) {
+              return null;
+            }
+            const startAddress = cellRefToAddress(startRef);
+            const endAddress = cellRefToAddress(endRef);
+            if (!startAddress || !endAddress) {
+              return null;
+            }
+            const minRow = Math.min(startAddress[0], endAddress[0]);
+            const maxRow = Math.max(startAddress[0], endAddress[0]);
+            const minCol = Math.min(startAddress[1], endAddress[1]);
+            const maxCol = Math.max(startAddress[1], endAddress[1]);
+            return {
+              minRow,
+              maxRow,
+              minCol,
+              maxCol,
+              rowCount: maxRow - minRow + 1,
+              colCount: maxCol - minCol + 1
+            };
+          }
+
+          function updateEditModeRangeHighlight(startRef, endRef) {
+            if (!isEditMode) {
+              return;
+            }
+            const bounds = computeBoundsFromCellRefs(startRef, endRef);
+            if (!bounds) {
+              clearEditModeRangeHighlight();
+              return;
+            }
+            editModeRangeHighlight.active = true;
+            editModeRangeHighlight.bounds = bounds;
+            updateSelectionOverlay();
+          }
+
+          function clearEditModeRangeHighlight() {
+            const wasActive = editModeRangeHighlight.active;
+            editModeRangeHighlight.active = false;
+            editModeRangeHighlight.bounds = null;
+            if (wasActive || isEditMode) {
+              updateSelectionOverlay();
+            }
+          }
           const MODES = Object.freeze({
             READY: 'ready',
             ENTER: 'enter',
             EDIT: 'edit'
           });
           const MODE_METADATA = {
-            [MODES.READY]: { prefix: "🔎 Selecting" },
-            [MODES.ENTER]: { prefix: "📥 Entering" },
-            [MODES.EDIT]: { prefix: "✏ Editing" }
+            [MODES.READY]: { prefix: "🔎\uFE0E Selecting" },
+            [MODES.ENTER]: { prefix: "📥\uFE0E Entering" },
+            [MODES.EDIT]: { prefix: "✏\uFE0E Editing" }
           };
           let currentMode = MODES.READY;
+          const EDITOR_CURSOR_TRACKING_MODES = new Set([MODES.ENTER, MODES.EDIT]);
+          const EDITOR_STATUS_PLACEHOLDER = "--";
+
+          function formatEditorStatusValue(value) {
+            if (typeof value !== "number" || !Number.isFinite(value)) {
+              return EDITOR_STATUS_PLACEHOLDER;
+            }
+            return Math.max(0, Math.floor(value)).toString().padStart(3, "0");
+          }
+
+          function updateEditorStatusDisplay(positionOverride = null) {
+            if (!editorStatusLineElement || !editorStatusColumnElement) {
+              return;
+            }
+
+            const shouldTrack = EDITOR_CURSOR_TRACKING_MODES.has(currentMode);
+            if (!shouldTrack) {
+              editorStatusBarElement?.classList.remove("is-active");
+              editorStatusLineElement.textContent = EDITOR_STATUS_PLACEHOLDER;
+              editorStatusColumnElement.textContent = EDITOR_STATUS_PLACEHOLDER;
+              return;
+            }
+
+            const activePosition =
+              positionOverride ||
+              (editor && typeof editor.getPosition === "function" ? editor.getPosition() : null);
+
+            editorStatusBarElement?.classList.add("is-active");
+
+            if (!activePosition) {
+              editorStatusLineElement.textContent = EDITOR_STATUS_PLACEHOLDER;
+              editorStatusColumnElement.textContent = EDITOR_STATUS_PLACEHOLDER;
+              return;
+            }
+
+            editorStatusLineElement.textContent = formatEditorStatusValue(activePosition.lineNumber);
+            editorStatusColumnElement.textContent = formatEditorStatusValue(activePosition.column);
+          }
+
           const modePrefixElement = document.getElementById("cellModePrefix");
           const rangeChipElement = document.getElementById("cellRangeChip");
           let currentSelectionLabel = "";
@@ -595,6 +797,10 @@ export async function initializeApp() {
             const isEditingMode = newMode === MODES.ENTER || newMode === MODES.EDIT;
             if (wasEditingMode && !isEditingMode) {
               resetEnterModePointerState();
+              disarmEditModePointerNavigation();
+            }
+            if (newMode !== MODES.EDIT) {
+              disarmEditModePointerNavigation();
             }
             updateModeIndicatorElements();
             if (newMode === MODES.READY && typeof syncResultPaneWithSelection === "function") {
@@ -608,6 +814,7 @@ export async function initializeApp() {
                 editorWrapper.classList.remove('editor-edit-mode');
               }
             }
+            updateEditorStatusDisplay();
           }
 
           setMode(MODES.READY);
@@ -986,11 +1193,6 @@ export async function initializeApp() {
             console.warn("Clappy elements not found, continuing without chat UI.");
           }
 
-          // Initialize Monaco Editor (load asynchronously in background)
-          // Don't block grid initialization on Monaco
-          window.monacoEditor = null;
-          let editor = null;
-
           // Load Monaco in background - don't wait for it
           if (monacoEditorContainer) {
             setTimeout(() => {
@@ -1250,6 +1452,7 @@ export async function initializeApp() {
 
                   // Set initial cursor position to line 1
                   editor.setPosition({ lineNumber: 1, column: 1 });
+                  updateEditorStatusDisplay();
 
                   // Throttled layout update for performance
                   let layoutTimeout = null;
@@ -2581,7 +2784,7 @@ export async function initializeApp() {
 
                           const messagesHTML = sortedMarkers.map((marker, index) => {
                             const severity = marker.severity === monaco.MarkerSeverity.Error ? 'error' : 'warning';
-                            const icon = marker.severity === monaco.MarkerSeverity.Error ? '✕' : '⚠';
+                            const icon = marker.severity === monaco.MarkerSeverity.Error ? '✕\uFE0E' : '⚠\uFE0E';
                             const source = marker.source || 'Unknown';
                             const code = marker.code || '';
                             const messageText = marker.message || 'No message';
@@ -3391,6 +3594,11 @@ export async function initializeApp() {
                       if (currentMode === MODES.ENTER && appliedRange) {
                         updateEnterModePointerChipRange(appliedRange);
                         updateEnterModePointerCoordinatesFromReference(reference);
+                      } else if (currentMode === MODES.EDIT) {
+                        if (!enterModePointerState.active) {
+                          initializeEnterModePointerState(window.selectedCell || null);
+                        }
+                        updateEnterModePointerCoordinatesFromReference(reference);
                       }
 
                       if (typeof currentEditor.focus === 'function') {
@@ -3404,6 +3612,12 @@ export async function initializeApp() {
                     editor.onDidChangeModelContent((e) => {
                       // Skip if this is a programmatic change
                       if (window.isProgrammaticCursorChange) return;
+                      if (currentMode === MODES.EDIT && editModePointerArmed && e && Array.isArray(e.changes)) {
+                        const insertedDelimiter = e.changes.some(change => change?.text && POINTER_NAV_SEPARATOR_REGEX.test(change.text));
+                        if (insertedDelimiter) {
+                          disarmEditModePointerNavigation();
+                        }
+                      }
 
                       clearTimeout(capitalizeTimeout);
                       capitalizeTimeout = setTimeout(() => {
@@ -3574,185 +3788,6 @@ export async function initializeApp() {
                           });
                         }
                       }, 100); // Small delay to allow typing to complete
-                    });
-
-                    editor.onDidChangeModelContent(() => {
-                      if (isEditMode) {
-                        syncEditingCellDisplayWithPane();
-                      }
-                    });
-
-                    editor.onDidChangeCursorPosition((e) => {
-                      if (window.isProgrammaticCursorChange) return;
-                      if (isEditMode) {
-                        syncEditingCellDisplayWithPane(false, editor);
-                      }
-                      if (e && e.position) {
-                        rememberFormulaCaretPosition(e.position);
-                      }
-                      const inChip = isPositionInsideChip(e.position);
-                      if (inChip === isCursorInChip) return;
-                      isCursorInChip = inChip;
-                      suppressSuggestionsInChip(inChip);
-                    });
-
-                    editor.onDidFocusEditorText(() => {
-                      editorHasFocus = true;
-                      incompleteChipCursorLock = null;
-                      updateCellChips();
-                    });
-
-                    editor.onDidBlurEditorText(() => {
-                      editorHasFocus = false;
-                      incompleteChipCursorLock = null;
-                      updateCellChips();
-                    });
-
-                    function closeSuggestionsIfOpen() {
-                      const suggestController = editor.getContribution('suggestController') || editor.getContribution('editor.contrib.suggestController');
-                      if (!suggestController) return;
-                      if (typeof suggestController.cancel === 'function') {
-                        suggestController.cancel();
-                        return;
-                      }
-                      const widget = suggestController.widget && suggestController.widget.value;
-                      if (widget && typeof widget.isOpen === 'function' && widget.isOpen()) {
-                        suggestController.cancel?.();
-                        widget.cancel?.();
-                      }
-                    }
-
-                    function rememberFormulaCaretPosition(position) {
-                      if (!position || typeof position.lineNumber !== 'number' || typeof position.column !== 'number') {
-                        return;
-                      }
-                      window.lastFormulaCaretPosition = {
-                        lineNumber: position.lineNumber,
-                        column: position.column
-                      };
-                    }
-
-                    function insertNewlineWithIndent() {
-                      const targetEditor = window.monacoEditor || editor;
-                      if (!targetEditor) return false;
-                      const model = targetEditor.getModel?.();
-                      if (!model) return false;
-                      let selection = typeof targetEditor.getSelection === 'function' ? targetEditor.getSelection() : null;
-                      if ((!selection || typeof selection.getPosition !== 'function') && typeof targetEditor.getPosition === 'function') {
-                        const fallbackPosition = targetEditor.getPosition() || window.lastFormulaCaretPosition;
-                        if (fallbackPosition) {
-                          selection = new monaco.Selection(
-                            fallbackPosition.lineNumber,
-                            fallbackPosition.column,
-                            fallbackPosition.lineNumber,
-                            fallbackPosition.column
-                          );
-                          rememberFormulaCaretPosition(fallbackPosition);
-                        }
-                      } else if (!selection || typeof selection.getPosition !== 'function') {
-                        const storedPosition = window.lastFormulaCaretPosition;
-                        if (storedPosition) {
-                          selection = new monaco.Selection(
-                            storedPosition.lineNumber,
-                            storedPosition.column,
-                            storedPosition.lineNumber,
-                            storedPosition.column
-                          );
-                        }
-                      }
-                      if (!selection || typeof selection.getPosition !== 'function') {
-                        return false;
-                      }
-                      const position = selection.getPosition();
-                      if (!position) return false;
-
-                      const lineNumber = position.lineNumber;
-                      const totalLines = model.getLineCount();
-
-                      // If there's already another line available, just move the caret
-                      if (lineNumber < totalLines) {
-                        const targetLine = lineNumber + 1;
-                        const nextLineMaxColumn = model.getLineMaxColumn(targetLine);
-                        const targetColumn = Math.min(position.column, nextLineMaxColumn);
-                        targetEditor.setPosition(new monaco.Position(targetLine, targetColumn));
-                        rememberFormulaCaretPosition({ lineNumber: targetLine, column: targetColumn });
-                        return true;
-                      }
-
-                      const lineContent = model.getLineContent(lineNumber) || '';
-
-                      // Determine indentation to carry to next line (leading whitespace)
-                      const leadingWhitespaceMatch = lineContent.match(/^\s+/);
-                      let indent = leadingWhitespaceMatch ? leadingWhitespaceMatch[0] : '';
-
-                      // If the line starts with chip padding, strip all of it from indentation
-                      if (hasChipPaddingAtLineStart(lineNumber)) {
-                        indent = indent.replace(/^ +/, '');
-                      }
-
-                      const insertText = '\n' + indent;
-
-                      window.isProgrammaticCursorChange = true;
-                      targetEditor.executeEdits('custom-enter', [{
-                        range: selection,
-                        text: insertText,
-                        forceMoveMarkers: true
-                      }]);
-
-                      const targetLine = lineNumber + 1;
-                      const targetColumn = indent.length + 1;
-                      targetEditor.setPosition(new monaco.Position(targetLine, targetColumn));
-                      rememberFormulaCaretPosition({ lineNumber: targetLine, column: targetColumn });
-
-                      Promise.resolve().then(() => {
-                        window.isProgrammaticCursorChange = false;
-                      });
-                      return true;
-                    }
-                    window.insertFormulaPaneNewline = insertNewlineWithIndent;
-
-                    function handleEnterKey(e) {
-                      const model = editor.getModel();
-                      if (!model) return;
-                      const selection = editor.getSelection();
-                      if (!selection) return;
-
-                       closeSuggestionsIfOpen();
-
-                      const isModifierEnter = !!e && !e.altKey && (e.ctrlKey || e.metaKey);
-
-                      if ((currentMode === MODES.ENTER || currentMode === MODES.EDIT) && isModifierEnter) {
-                        const inserted = insertNewlineWithIndent();
-                        if (inserted) {
-                          const activeEditor = window.monacoEditor || editor;
-                          if (activeEditor && typeof activeEditor.focus === 'function') {
-                            activeEditor.focus();
-                          }
-                        }
-                        return;
-                      }
-
-                      if (currentMode === MODES.ENTER || currentMode === MODES.EDIT) {
-                        suppressNextDocumentEnter = true;
-                        const moveDelta = { row: e && e.shiftKey ? -1 : 1, col: 0 };
-                        const didCommit = commitEditorChanges(moveDelta);
-                        if (!didCommit) {
-                          const activeEditor = window.monacoEditor || editor;
-                          if (activeEditor && typeof activeEditor.focus === 'function') {
-                            activeEditor.focus();
-                          }
-                        }
-                        return;
-                      }
-
-                      insertNewlineWithIndent();
-                    }
-
-                    editor.onKeyDown((e) => {
-                      if (e.keyCode === monaco.KeyCode.Enter) {
-                        e.preventDefault();
-                        handleEnterKey(e);
-                      }
                     });
 
                     // Update cell chips on content change
@@ -4000,21 +4035,66 @@ export async function initializeApp() {
                     return;
                   });
 
-                  // Set up Ctrl+Enter command after editor is created
-                  editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, () => {
+                  const handleEditorEnterKey = (event) => {
+                    event.preventDefault();
                     if (currentMode === MODES.ENTER || currentMode === MODES.EDIT) {
-                      if (typeof insertNewlineWithIndent === 'function') {
-                        const inserted = insertNewlineWithIndent();
-                        if (inserted) {
-                      return;
+                      const moveDelta = { row: event.shiftKey ? -1 : 1, col: 0 };
+                      const committed = commitEditorChanges(moveDelta);
+                      if (!committed) {
+                        const activeEditor = window.monacoEditor || editor;
+                        if (activeEditor && typeof activeEditor.focus === 'function') {
+                          activeEditor.focus();
                         }
                       }
-                    }
-                    if (currentMode === MODES.READY) {
                       return;
                     }
                     commitEditorChanges(null);
+                  };
+
+                  editor.onKeyDown((event) => {
+                    if (event.keyCode === monaco.KeyCode.Enter && !event.ctrlKey && !event.metaKey) {
+                      handleEditorEnterKey(event);
+                    }
                   });
+
+                  const moveCursorToNextLineOrAppend = () => {
+                    const targetEditor = window.monacoEditor || editor;
+                    if (!targetEditor) return;
+                    const model = targetEditor.getModel?.();
+                    if (!model) return;
+                    const position = targetEditor.getPosition();
+                    if (!position) return;
+
+                    const currentLine = position.lineNumber;
+                    const totalLines = model.getLineCount();
+                    if (currentLine < totalLines) {
+                      const nextLine = currentLine + 1;
+                      const nextLineMaxColumn = model.getLineMaxColumn(nextLine);
+                      const newColumn = Math.min(position.column, nextLineMaxColumn);
+                      targetEditor.setPosition(new monaco.Position(nextLine, newColumn));
+                      updateEditorStatusDisplay({ lineNumber: nextLine, column: newColumn });
+                      return;
+                    }
+
+                    const lastColumn = model.getLineMaxColumn(totalLines);
+                    window.isProgrammaticCursorChange = true;
+                    targetEditor.executeEdits('ctrl-enter-next-line', [{
+                      range: new monaco.Range(totalLines, lastColumn, totalLines, lastColumn),
+                      text: '\n',
+                      forceMoveMarkers: true
+                    }]);
+                    const appendedLine = totalLines + 1;
+                    targetEditor.setPosition(new monaco.Position(appendedLine, 1));
+                    updateEditorStatusDisplay({ lineNumber: appendedLine, column: 1 });
+                    Promise.resolve().then(() => {
+                      window.isProgrammaticCursorChange = false;
+                    });
+                  };
+
+                  editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, () => {
+                    moveCursorToNextLineOrAppend();
+                  });
+
                   window.monacoEditor = editor;
                   console.log("Monaco Editor created successfully", editor);
 
@@ -5085,9 +5165,24 @@ export async function initializeApp() {
           // Function to update the selection overlay rectangle
           function updateSelectionOverlay() {
             const overlay = selectionOverlayElement;
-            // Hide overlay if in edit mode or no cells selected
-            if (!overlay || selectedCells.size === 0 || isEditMode) {
-              if (overlay) overlay.style.display = "none";
+            if (!overlay) {
+              return;
+            }
+
+            if (isEditMode) {
+              if (editModeRangeHighlight.active && editModeRangeHighlight.bounds) {
+                positionElementForBounds(overlay, editModeRangeHighlight.bounds);
+              } else {
+                overlay.style.display = "none";
+              }
+              if (fillHandleElement) {
+                fillHandleElement.style.display = "none";
+              }
+              return;
+            }
+
+            if (selectedCells.size === 0) {
+              overlay.style.display = "none";
               if (fillHandleElement) {
                 fillHandleElement.style.display = "none";
               }
@@ -5899,6 +5994,14 @@ export async function initializeApp() {
             if (event.ctrlKey || event.metaKey || event.altKey) {
               return false;
             }
+            const currentEditor = window.monacoEditor || editor;
+            const pointerNavigationAllowed = currentMode === MODES.ENTER
+              || isEditModePointerNavigationAllowed(currentEditor);
+            if (!pointerNavigationAllowed) {
+              return false;
+            }
+            const extendRange = !!event.shiftKey;
+            const pointerStartRef = getCurrentPointerReference(currentEditor);
             const pointerResult = moveEnterModePointer(navigationMove.row, navigationMove.col);
             if (!pointerResult || !pointerResult.reference) {
               return false;
@@ -5908,7 +6011,21 @@ export async function initializeApp() {
               event.stopImmediatePropagation();
             }
             event.stopPropagation();
-            applyReferenceToFormula(pointerResult.reference);
+            if (extendRange) {
+              if (!enterModePointerState.rangeAnchorRef) {
+                enterModePointerState.rangeAnchorRef = pointerStartRef || pointerResult.reference;
+              }
+              const anchorRef = enterModePointerState.rangeAnchorRef || pointerResult.reference;
+              const rangeReference = buildRangeReference(anchorRef, pointerResult.reference);
+              if (rangeReference) {
+                applyReferenceToFormula(rangeReference);
+              }
+              updateEditModeRangeHighlight(anchorRef, pointerResult.reference);
+            } else {
+              enterModePointerState.rangeAnchorRef = pointerResult.reference;
+              clearEditModeRangeHighlight();
+              applyReferenceToFormula(pointerResult.reference);
+            }
             return true;
           }
 
@@ -6085,7 +6202,7 @@ export async function initializeApp() {
             if (currentMode === MODES.EDIT) {
               const navigationMove = editingNavigationMap[e.key];
               if (navigationMove) {
-                if (!isEditorFocused) {
+                if (isEditorFocused) {
                   return;
                 }
                 e.preventDefault();
@@ -6094,37 +6211,17 @@ export async function initializeApp() {
               }
             }
 
-            const isModifierEnter = e.key === 'Enter' && !e.altKey && (e.ctrlKey || e.metaKey);
-            if ((currentMode === MODES.ENTER || currentMode === MODES.EDIT) && isModifierEnter) {
-              let handledModifierEnter = false;
-              const insertFn = window.insertFormulaPaneNewline;
-              if (typeof insertFn === 'function') {
-                handledModifierEnter = insertFn();
-              }
-              e.preventDefault();
-              suppressNextDocumentEnter = true;
-              const activeEditor = window.monacoEditor || editor;
-              if (activeEditor && typeof activeEditor.focus === 'function') {
-                activeEditor.focus();
-              }
-              if (!handledModifierEnter && typeof activeEditor?.setPosition === 'function' && typeof activeEditor?.getPosition === 'function') {
-                const currentPosition = activeEditor.getPosition();
-                if (currentPosition) {
-                  activeEditor.setPosition(currentPosition);
-                }
-              }
-              return;
-            }
-
             if (currentMode === MODES.ENTER || currentMode === MODES.EDIT) {
-              const commitMap = editingCommitMap(e.shiftKey);
-              if (commitMap[e.key]) {
-                if (isEditorFocused) {
+              if (!(e.ctrlKey || e.metaKey)) {
+                const commitMap = editingCommitMap(e.shiftKey);
+                if (commitMap[e.key]) {
+                  if (isEditorFocused) {
+                    return;
+                  }
+                  e.preventDefault();
+                  commitEditorChanges(commitMap[e.key]);
                   return;
                 }
-                e.preventDefault();
-                commitEditorChanges(commitMap[e.key]);
-                return;
               }
             }
           };
@@ -6175,6 +6272,7 @@ export async function initializeApp() {
             cancelFormulaSelection();
             if (reference) {
               applyReferenceToFormula(reference);
+              armEditModePointerNavigation(reference);
             }
           }
 

@@ -1,14 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
   <head>
-    <!-- Google tag (gtag.js) -->
-    <script async src="https://www.googletagmanager.com/gtag/js?id=G-PZ9LE2EGD4"></script>
-    <script>
-      window.dataLayer = window.dataLayer || [];
-      function gtag(){dataLayer.push(arguments);}
-      gtag('js', new Date());
-      gtag('config', 'G-PZ9LE2EGD4');
-    </script>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Harbor Formulas</title>
@@ -123,16 +115,34 @@
       <!-- Right Side - Formula Editor -->
       <div class="formula-editor" id="formulaEditor" style="width: 400px; min-width: 200px; flex: 0 0 400px; display: flex;">
         <div class="editor-header">
-          <span class="cell-range-pill" id="cellRangePill">
-            <span class="cell-mode-prefix" id="cellModePrefix">🔎 Selecting</span>
-            <span class="cell-range-chip" id="cellRangeChip">(A1)</span>
-          </span>
           <span class="formula-equals">=</span>
         </div>
         <div class="editor-wrapper">
           <div class="editor-shell" id="formulaEditorInner">
             <div id="monacoEditor" style="width: 100%; height: 100%;"></div>
           </div>
+        </div>
+        <div
+          class="editor-status-bar"
+          id="editorStatusBar"
+          role="status"
+          aria-live="polite"
+          aria-atomic="true"
+        >
+          <span class="status-item status-selection">
+            <span class="cell-range-pill" id="cellRangePill">
+              <span class="cell-mode-prefix" id="cellModePrefix">🔎&#xFE0E; Selecting</span>
+              <span class="cell-range-chip" id="cellRangeChip">(A1)</span>
+            </span>
+          </span>
+          <span class="status-item">
+            <span class="status-label">LN</span>
+            <span class="status-value" id="editorStatusLine">--</span>
+          </span>
+          <span class="status-item">
+            <span class="status-label">COL</span>
+            <span class="status-value" id="editorStatusColumn">--</span>
+          </span>
         </div>
         <div class="bottom-panes">
           <div class="sliding-pane result-pane collapsed">
@@ -149,11 +159,11 @@
               <span class="pane-title">MESSAGES</span>
               <span class="pane-indicators">
                 <span class="error-indicator">
-                  <span class="error-icon">✕</span>
+                  <span class="error-icon">✕&#xFE0E;</span>
                   <span class="error-count">0</span>
                 </span>
                 <span class="warning-indicator">
-                  <span class="warning-icon">⚠</span>
+                  <span class="warning-icon">⚠&#xFE0E;</span>
                   <span class="warning-count">0</span>
                 </span>
               </span>

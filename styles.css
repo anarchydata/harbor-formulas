@@ -1050,7 +1050,7 @@ td.fill-preview .grid-cell-display {
 
 .cell-mode-prefix {
   font-size: 12px;
-  color: #569CD6;
+  color: #8a949f;
   white-space: nowrap;
 }
 
@@ -1244,11 +1244,55 @@ td.fill-preview .grid-cell-display {
   visibility: visible !important;
   opacity: 1 !important;
   /* Keep wrapper neutral – inner shell handles visuals */
-  margin-top: 8px;
-  margin-bottom: 16px;
-  padding-right: 0;
-  padding-bottom: 24px;
+  margin: 0;
+  padding: 0;
   box-sizing: border-box;
+}
+
+.editor-status-bar {
+  display: flex;
+  justify-content: flex-start;
+  align-items: center;
+  gap: 16px;
+  font-family: "Consolas", "Courier New", monospace;
+  font-size: 11px;
+  color: #c8c8c8;
+  background: #050505;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-top: none;
+  padding: 6px 12px;
+  margin: 0 12px 12px 0;
+  align-self: stretch;
+  box-sizing: border-box;
+  min-height: 28px;
+}
+
+.editor-status-bar .status-item {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  letter-spacing: 0.5px;
+}
+
+.editor-status-bar .status-item.status-selection {
+  margin-right: auto;
+  align-items: center;
+  gap: 8px;
+}
+
+.editor-status-bar .status-label {
+  color: #8a949f;
+  letter-spacing: 0.5px;
+}
+
+.editor-status-bar .status-value {
+  color: #8a949f;
+  min-width: 26px;
+  text-align: right;
+}
+
+.editor-status-bar:not(.is-active) {
+  opacity: 0.6;
 }
 
 .editor-shell {
