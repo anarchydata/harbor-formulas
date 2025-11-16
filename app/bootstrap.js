@@ -121,7 +121,6 @@ export async function initializeApp() {
           if (!sidebarToggleButton) {
             return;
           }
-          sidebarToggleButton.textContent = isCollapsed ? ">>" : "<<";
           sidebarToggleButton.setAttribute("title", isCollapsed ? "Expand File Explorer" : "Collapse File Explorer");
           sidebarToggleButton.setAttribute("aria-expanded", (!isCollapsed).toString());
         }
@@ -129,9 +128,21 @@ export async function initializeApp() {
         if (sidebarElement && sidebarToggleButton) {
           sidebarToggleButton.addEventListener("click", () => {
             const isCollapsed = sidebarElement.classList.toggle("collapsed");
+            if (isCollapsed) {
+              sidebarElement.style.width = "40px";
+              sidebarElement.style.minWidth = "40px";
+            } else {
+              sidebarElement.style.width = "";
+              sidebarElement.style.minWidth = "";
+            }
             updateSidebarToggleState(isCollapsed);
           });
-          updateSidebarToggleState(sidebarElement.classList.contains("collapsed"));
+          const initiallyCollapsed = sidebarElement.classList.contains("collapsed");
+          if (initiallyCollapsed) {
+            sidebarElement.style.width = "40px";
+            sidebarElement.style.minWidth = "40px";
+          }
+          updateSidebarToggleState(initiallyCollapsed);
         }
 
         function getActiveSheetId() {
