@@ -71,7 +71,11 @@
       <div class="middle-section">
         <!-- Grid Section (60%) -->
         <div class="grid-container">
-          <div class="grid-header">Spreadsheet</div>
+          <div class="grid-header">
+            <select class="grid-name-dropdown" id="gridNameDropdown">
+              <option value="" selected>New name....</option>
+            </select>
+          </div>
           <div class="grid-wrapper">
             <div class="grid-wrapper-inner" id="gridWrapperInner">
               <table class="grid-table" aria-label="Spreadsheet grid">
@@ -168,6 +172,51 @@
               <span class="cell-range-chip" id="cellRangeChip">(A1)</span>
             </span>
           </span>
+          <button
+            class="status-collapse-btn"
+            id="wordWrapBtn"
+            type="button"
+            title="Word wrap"
+            aria-label="Word wrap"
+          >
+            <svg class="collapse-icon" width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M3 6L21 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+              <path d="M3 12L18 12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+              <path d="M3 18L21 18" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+              <path d="M18 10L21 12L18 14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+            </svg>
+          </button>
+          <button
+            class="status-collapse-btn status-tidy-btn"
+            id="broomBtn"
+            type="button"
+            title="Tidy"
+            aria-label="Tidy"
+          >
+            <svg class="collapse-icon" width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M12 2L12 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+              <path d="M12 18L12 22" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+              <path d="M2 12L6 12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+              <path d="M18 12L22 12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+              <path d="M5.5 5.5L8 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+              <path d="M16 16L18.5 18.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+              <path d="M18.5 5.5L16 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+              <path d="M5.5 18.5L8 16" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+              <path d="M12 8L10 12L12 16L14 12L12 8Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+            </svg>
+          </button>
+          <button
+            class="status-collapse-btn"
+            id="collapseErrorsBtn"
+            type="button"
+            title="Collapse"
+            aria-label="Collapse"
+          >
+            <svg class="collapse-icon" width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M4 4L4 16M1 13L4 16L7 13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+              <path d="M14 4L14 16M11 13L14 16L17 13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+            </svg>
+          </button>
           <span class="status-item">
             <span class="status-label">LN</span>
             <span class="status-value" id="editorStatusLine">--</span>

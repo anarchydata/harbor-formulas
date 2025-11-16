@@ -6637,6 +6637,67 @@ export async function initializeApp() {
                 }
               });
 
+              // Double-click to auto-resize column
+              th.addEventListener("dblclick", (e) => {
+                const rect = th.getBoundingClientRect();
+                const rightEdge = rect.right;
+                // Check if double-click is within 10px of right edge
+                if (e.clientX >= rightEdge - 10) {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  
+                  // Get all cells in this column
+                  const allCells = gridBody.querySelectorAll(`td[data-col="${index}"]`);
+                  
+                  // Create a temporary element to measure text width
+                  const measureEl = document.createElement('div');
+                  measureEl.style.position = 'absolute';
+                  measureEl.style.visibility = 'hidden';
+                  measureEl.style.whiteSpace = 'nowrap';
+                  measureEl.style.font = window.getComputedStyle(allCells[0] || th).font;
+                  document.body.appendChild(measureEl);
+                  
+                  let maxWidth = th.offsetWidth; // Start with header width
+                  
+                  // Measure header text
+                  measureEl.textContent = th.textContent || '';
+                  maxWidth = Math.max(maxWidth, measureEl.offsetWidth);
+                  
+                  // Measure all cell contents
+                  allCells.forEach(cell => {
+                    const cellText = cell.textContent || '';
+                    if (cellText.trim()) {
+                      measureEl.textContent = cellText;
+                      maxWidth = Math.max(maxWidth, measureEl.offsetWidth);
+                    }
+                  });
+                  
+                  document.body.removeChild(measureEl);
+                  
+                  // Add padding (left + right padding from cell)
+                  const sampleCell = allCells[0] || th;
+                  const computedStyle = window.getComputedStyle(sampleCell);
+                  const paddingLeft = parseFloat(computedStyle.paddingLeft) || 0;
+                  const paddingRight = parseFloat(computedStyle.paddingRight) || 0;
+                  const totalWidth = Math.max(40, maxWidth + paddingLeft + paddingRight + 20); // Minimum 40px, add extra 20px buffer
+                  
+                  // Set the width
+                  const widthStr = `${totalWidth}px`;
+                  th.style.width = widthStr;
+                  th.style.minWidth = widthStr;
+                  
+                  allCells.forEach(cell => {
+                    cell.style.width = widthStr;
+                    cell.style.minWidth = widthStr;
+                  });
+                  
+                  // Update selection overlay if needed
+                  if (typeof updateSelectionOverlay === 'function') {
+                    updateSelectionOverlay();
+                  }
+                }
+              });
+
               headerRow.appendChild(th);
             });
 
@@ -6988,6 +7049,173 @@ export async function initializeApp() {
               }
             });
           });
+
+          // Word wrap button handler
+          const wordWrapBtn = document.getElementById('wordWrapBtn');
+          if (wordWrapBtn) {
+            let wordWrapEnabled = false;
+            wordWrapBtn.addEventListener('click', () => {
+              const currentEditor = window.monacoEditor || editor;
+              if (currentEditor && typeof currentEditor.updateOptions === 'function') {
+                wordWrapEnabled = !wordWrapEnabled;
+                currentEditor.updateOptions({
+                  wordWrap: wordWrapEnabled ? 'on' : 'off'
+                });
+                wordWrapBtn.classList.toggle('active', wordWrapEnabled);
+              }
+            });
+          }
+
+          // Tidy button handler
+          const broomBtn = document.getElementById('broomBtn');
+          if (broomBtn) {
+            broomBtn.addEventListener('click', () => {
+              const currentEditor = window.monacoEditor || editor;
+              if (currentEditor && typeof currentEditor.getValue === 'function' && typeof currentEditor.setValue === 'function') {
+                const currentText = currentEditor.getValue();
+                if (currentText) {
+                  // Preserve comments while processing
+                  const commentPlaceholders = [];
+                  let placeholderIndex = 0;
+                  
+                  // Replace block comments with placeholders
+                  let processed = currentText.replace(/\/\*[\s\S]*?\*\//g, (match) => {
+                    const placeholder = `__COMMENT_BLOCK_${placeholderIndex}__`;
+                    commentPlaceholders.push({ placeholder, content: match });
+                    placeholderIndex++;
+                    return placeholder;
+                  });
+                  
+                  // Replace line comments with placeholders
+                  processed = processed.replace(/\/\/[^\r\n]*(?:\r\n|\r|\n|$)/g, (match) => {
+                    const placeholder = `__COMMENT_LINE_${placeholderIndex}__`;
+                    commentPlaceholders.push({ placeholder, content: match });
+                    placeholderIndex++;
+                    return placeholder;
+                  });
+                  
+                  // Remove existing line breaks and normalize whitespace (but keep placeholders intact)
+                  let formatted = processed.replace(/[\r\n]+/g, ' ').replace(/[ \t]+/g, ' ').trim();
+                  
+                  let result = '';
+                  let indentLevel = 0;
+                  const indentSize = 4;
+                  
+                  let i = 0;
+                  while (i < formatted.length) {
+                    // Check if we're at the start of a placeholder
+                    let foundPlaceholder = false;
+                    for (const { placeholder, content } of commentPlaceholders) {
+                      if (formatted.substring(i, i + placeholder.length) === placeholder) {
+                        // Output comment exactly as-is (including its newline)
+                        result += content;
+                        i += placeholder.length;
+                        foundPlaceholder = true;
+                        break;
+                      }
+                    }
+                    
+                    if (foundPlaceholder) {
+                      continue;
+                    }
+                    
+                    const char = formatted[i];
+                    
+                    if (char === '(') {
+                      result += char;
+                      indentLevel++;
+                      result += '\n' + ' '.repeat(indentLevel * indentSize);
+                    } else if (char === ',') {
+                      result += char;
+                      result += '\n' + ' '.repeat(indentLevel * indentSize);
+                    } else if (char === ')') {
+                      indentLevel--;
+                      if (indentLevel < 0) indentLevel = 0;
+                      result += '\n' + ' '.repeat(indentLevel * indentSize);
+                      result += char;
+                    } else {
+                      result += char;
+                    }
+                    
+                    i++;
+                  }
+                  
+                  currentEditor.setValue(result);
+                  
+                  const lineCount = currentEditor.getModel().getLineCount();
+                  const lastLine = currentEditor.getModel().getLineContent(lineCount);
+                  currentEditor.setPosition({ lineNumber: lineCount, column: lastLine.length + 1 });
+                }
+              }
+            });
+          }
+
+          // Collapse errors button handler
+          const collapseErrorsBtn = document.getElementById('collapseErrorsBtn');
+          if (collapseErrorsBtn) {
+            collapseErrorsBtn.addEventListener('click', () => {
+              const currentEditor = window.monacoEditor || editor;
+              if (currentEditor && typeof currentEditor.getValue === 'function' && typeof currentEditor.setValue === 'function') {
+                const currentText = currentEditor.getValue();
+                if (currentText) {
+                  // Preserve comments while processing - extract them first
+                  const commentPlaceholders = [];
+                  let placeholderIndex = 0;
+                  
+                  // Replace block comments with placeholders (preserve exactly as-is)
+                  let processed = currentText.replace(/\/\*[\s\S]*?\*\//g, (match) => {
+                    const placeholder = `__COMMENT_BLOCK_${placeholderIndex}__`;
+                    commentPlaceholders.push({ placeholder, content: match });
+                    placeholderIndex++;
+                    return placeholder;
+                  });
+                  
+                  // Replace line comments with placeholders (capture comment + newline if present)
+                  processed = processed.replace(/\/\/[^\r\n]*(?:\r\n|\r|\n|$)/g, (match) => {
+                    const placeholder = `__COMMENT_LINE_${placeholderIndex}__`;
+                    commentPlaceholders.push({ placeholder, content: match });
+                    placeholderIndex++;
+                    return placeholder;
+                  });
+                  
+                  // Now process the non-comment text
+                  // Remove all line breaks (but placeholders will preserve comment newlines)
+                  let collapsed = processed.replace(/[\r\n]+/g, ' ');
+                  
+                  // Normalize whitespace: replace multiple spaces/tabs with single space
+                  collapsed = collapsed.replace(/[ \t]+/g, ' ');
+                  
+                  // Remove spaces before commas
+                  collapsed = collapsed.replace(/\s+,/g, ',');
+                  
+                  // Remove spaces after opening parentheses
+                  collapsed = collapsed.replace(/\(\s+/g, '(');
+                  
+                  // Remove spaces before closing parentheses
+                  collapsed = collapsed.replace(/\s+\)/g, ')');
+                  
+                  // Ensure space after commas: ",A" -> ", A" (but don't add if space already exists)
+                  collapsed = collapsed.replace(/,([^\s])/g, ', $1');
+                  
+                  // Restore comments exactly as they were (including their newlines)
+                  commentPlaceholders.forEach(({ placeholder, content }) => {
+                    collapsed = collapsed.replace(placeholder, content);
+                  });
+                  
+                  // Trim the result
+                  collapsed = collapsed.trim();
+                  
+                  // Set the collapsed text back to the editor
+                  currentEditor.setValue(collapsed);
+                  
+                  // Move cursor to end
+                  const lineCount = currentEditor.getModel().getLineCount();
+                  const lastLine = currentEditor.getModel().getLineContent(lineCount);
+                  currentEditor.setPosition({ lineNumber: lineCount, column: lastLine.length + 1 });
+                }
+              }
+            });
+          }
 
           // Update heights on window resize
           window.addEventListener('resize', updateAllPaneHeights);
