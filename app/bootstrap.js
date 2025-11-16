@@ -4374,6 +4374,10 @@ export async function initializeApp() {
                       }
 
                       if (currentMode === MODES.EDIT) {
+                        // Prevent event from bubbling and causing blur
+                        e.stopPropagation();
+                        e.preventDefault();
+                        
                         editor.updateOptions({ cursorBlinking: 'blink' });
                         if (targetPosition && targetPosition.position) {
                           const { lineNumber, column } = targetPosition.position;
@@ -4382,6 +4386,12 @@ export async function initializeApp() {
                           if (typeof syncEditingCellDisplayWithPane === 'function') {
                             requestAnimationFrame(() => syncEditingCellDisplayWithPane(false, editor));
                           }
+                        }
+                        // Ensure editor stays focused after clicking
+                        if (typeof editor.focus === 'function') {
+                          requestAnimationFrame(() => {
+                            editor.focus();
+                          });
                         }
                         return;
                       }
