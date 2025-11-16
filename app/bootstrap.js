@@ -607,6 +607,8 @@ export async function initializeApp() {
           
           // Store the original editor value when entering edit mode to detect changes
           let originalEditValue = null;
+          // Store the original cell formula to restore when canceling
+          let originalCellFormula = null;
           const EDITOR_STATUS_PLACEHOLDER = "--";
 
           function formatEditorStatusValue(value) {
@@ -4458,6 +4460,35 @@ export async function initializeApp() {
             const shouldPreserveExistingContent = !!options.preserveExistingContent;
             let editorValue = "";
 
+            // Store the original cell formula to restore when canceling
+            if (cellRef && window.hf) {
+              const address = cellRefToAddress(cellRef);
+              if (address) {
+                const [row, col] = address;
+                const sheetId = 0;
+                try {
+                  const hfFormula = window.hf.getCellFormula({ col, row, sheet: sheetId });
+                  if (hfFormula) {
+                    originalCellFormula = hfFormula;
+                  } else {
+                    // Get raw formula and ensure it has "=" prefix
+                    const sheetIdForStore = getActiveSheetId();
+                    const rawFormula = readRawFormula(cellRef, sheetIdForStore) || "";
+                    originalCellFormula = rawFormula.startsWith("=") ? rawFormula : "=" + rawFormula;
+                  }
+                } catch (e) {
+                  const sheetIdForStore = getActiveSheetId();
+                  const rawFormula = readRawFormula(cellRef, sheetIdForStore) || "";
+                  originalCellFormula = rawFormula.startsWith("=") ? rawFormula : "=" + rawFormula;
+                }
+              } else {
+                originalCellFormula = "";
+              }
+            } else {
+              originalCellFormula = "";
+            }
+            console.log("[Enter Edit Mode] originalCellFormula:", originalCellFormula, "cellRef:", cellRef);
+
             if (!shouldPreserveExistingContent) {
               if (hasInitialText) {
                 editorValue = (options.initialText || "").toString();
@@ -6083,7 +6114,7 @@ export async function initializeApp() {
             if (forceExit || wasEditing) {
               const previouslyEditingCell = wasEditing ? window.selectedCell : null;
             setMode(MODES.READY);
-            if (previouslyEditingCell) {
+            if (previouslyEditingCell && !options.skipClearDisplay) {
               clearEditingCellDisplayOverride(previouslyEditingCell);
             }
 
@@ -6339,12 +6370,55 @@ export async function initializeApp() {
           }
 
           function cancelEditingSession() {
+            console.log("[cancelEditingSession] currentMode:", currentMode, "MODES.READY:", MODES.READY, "window.selectedCell:", window.selectedCell);
             if (currentMode === MODES.READY || !window.selectedCell) {
+              console.log("[cancelEditingSession] EARLY RETURN - currentMode === MODES.READY:", currentMode === MODES.READY, "!window.selectedCell:", !window.selectedCell);
               return;
             }
             const editingCell = window.selectedCell;
+            const editingCellRef = editingCell.getAttribute("data-ref");
             const currentEditor = window.monacoEditor || editor;
             cancelFormulaSelection();
+            
+            // Get current cell formula for logging
+            let currentCellFormula = null;
+            if (editingCellRef && window.hf) {
+              const address = cellRefToAddress(editingCellRef);
+              if (address) {
+                const [row, col] = address;
+                const sheetId = 0;
+                try {
+                  currentCellFormula = window.hf.getCellFormula({ col, row, sheet: sheetId });
+                } catch (e) {
+                  currentCellFormula = null;
+                }
+              }
+            }
+            console.log("[Click Out] currentCellFormula:", currentCellFormula, "originalCellFormula:", originalCellFormula, "cellRef:", editingCellRef);
+            
+            // Restore the original cell formula/value directly using HyperFormula
+            if (editingCellRef && originalCellFormula !== null && window.hf) {
+              const address = cellRefToAddress(editingCellRef);
+              if (address) {
+                const [row, col] = address;
+                const sheetId = 0;
+                try {
+                  // Restore the exact original formula/value
+                  window.hf.setCellContents({ col, row, sheet: sheetId }, [[originalCellFormula]]);
+                  window.hf.rebuildAndRecalculate();
+                  // Update the raw formula store
+                  const sheetIdForStore = getActiveSheetId();
+                  saveRawFormula(editingCellRef, originalCellFormula, sheetIdForStore);
+                  // Update data-formula attribute
+                  editingCell.setAttribute("data-formula", originalCellFormula);
+                  // Clear the display override and update display (clearEditingCellDisplayOverride calls updateCellDisplay)
+                  clearEditingCellDisplayOverride(editingCell);
+                } catch (error) {
+                  console.error("Error restoring cell value:", error);
+                }
+              }
+            }
+            
             const lastSavedFormula = getStoredFormulaText(editingCell);
             if (currentEditor && typeof currentEditor.setValue === 'function') {
               const fullValue = ensureSevenLines(lastSavedFormula || "");
@@ -6353,10 +6427,11 @@ export async function initializeApp() {
                 requestAnimationFrame(() => updateCellChips());
               }
             }
-            clearEditingCellDisplayOverride(editingCell);
             setMode(MODES.READY);
             originalEditValue = null; // Clear stored original value
-            enterSelectionModeAndSelectCell(editingCell, { forceExit: true });
+            originalCellFormula = null; // Clear stored original cell formula
+            // Skip clearEditingCellDisplayOverride since we already cleared it above
+            enterSelectionModeAndSelectCell(editingCell, { forceExit: true, skipClearDisplay: true });
           }
 
           function getNormalizedEditorValue() {
@@ -6952,6 +7027,30 @@ export async function initializeApp() {
                     return;
                   }
 
+                  // If in edit mode, handle clickout before selectCell updates the editor
+                  if (currentMode === MODES.EDIT || currentMode === MODES.ENTER) {
+                    // Get the current editor value BEFORE selectCell changes it
+                    const currentValue = getNormalizedEditorValue();
+                    const hasChanged = currentValue !== originalEditValue;
+                    
+                    if (!hasChanged) {
+                      // Value hasn't changed, cancel like Escape
+                      const editingCell = window.selectedCell;
+                      cancelEditingSession();
+                      // If clicking a different cell, select it after canceling
+                      if (cell !== editingCell) {
+                        selectCell(cell);
+                      }
+                    } else {
+                      // Value has changed, commit the changes
+                      commitEditorChanges();
+                      // Then proceed with selecting the clicked cell
+                      selectCell(cell);
+                    }
+                    e.preventDefault();
+                    return;
+                  }
+
                   isSelecting = true;
                   selectionStart = cell;
                   selectCell(cell);
@@ -6966,39 +7065,11 @@ export async function initializeApp() {
 
                 // Single click handler (when not dragging) - selection mode
                 cell.addEventListener("click", (e) => {
-                  // If in edit mode, check if value changed before exiting
+                  // Edit mode exit is handled in mousedown handler before selectCell updates the editor
+                  // By the time click fires, we're no longer in edit mode, so this check should not execute
                   if (currentMode === MODES.EDIT || currentMode === MODES.ENTER) {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    
-                    // Check if the editor value has changed from when edit mode was entered
-                    const currentValue = getNormalizedEditorValue();
-                    const hasChanged = currentValue !== originalEditValue;
-                    
-                    if (!hasChanged) {
-                      // Value hasn't changed, cancel like Escape - just exit without modifying cell
-                      const editingCell = window.selectedCell;
-                      const currentEditor = window.monacoEditor || editor;
-                      cancelFormulaSelection();
-                      const lastSavedFormula = getStoredFormulaText(editingCell);
-                      if (currentEditor && typeof currentEditor.setValue === 'function') {
-                        const fullValue = ensureSevenLines(lastSavedFormula || "");
-                        currentEditor.setValue(fullValue);
-                        if (typeof updateCellChips === 'function') {
-                          requestAnimationFrame(() => updateCellChips());
-                        }
-                      }
-                      clearEditingCellDisplayOverride(editingCell);
-                      setMode(MODES.READY);
-                      originalEditValue = null; // Clear stored original value
-                      // Select the clicked cell (not the editing cell)
-                      enterSelectionModeAndSelectCell(cell, { forceExit: true });
-                    } else {
-                      // Value has changed, commit the changes
-                      commitEditorChanges();
-                      // Then proceed with selecting the clicked cell
-                      enterSelectionModeAndSelectCell(cell);
-                    }
+                    // This should not happen since mousedown already handled edit mode exit
+                    // But if it does, just return to avoid duplicate handling
                     return;
                   }
                   
