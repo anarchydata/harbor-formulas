@@ -604,6 +604,9 @@ export async function initializeApp() {
           };
           let currentMode = MODES.READY;
           const EDITOR_CURSOR_TRACKING_MODES = new Set([MODES.ENTER, MODES.EDIT]);
+          
+          // Store the original editor value when entering edit mode to detect changes
+          let originalEditValue = null;
           const EDITOR_STATUS_PLACEHOLDER = "--";
 
           function formatEditorStatusValue(value) {
@@ -4525,6 +4528,10 @@ export async function initializeApp() {
               }
               syncEditingCellDisplayWithPane(true, currentEditor);
 
+              // Store the original normalized value AFTER setting it in the editor
+              // Use the same function that will be used for comparison to ensure exact match
+              originalEditValue = getNormalizedEditorValue();
+
               Promise.resolve().then(() => {
                 window.isProgrammaticCursorChange = false;
                 if (typeof updateCellChips === 'function') {
@@ -6348,6 +6355,7 @@ export async function initializeApp() {
             }
             clearEditingCellDisplayOverride(editingCell);
             setMode(MODES.READY);
+            originalEditValue = null; // Clear stored original value
             enterSelectionModeAndSelectCell(editingCell, { forceExit: true });
           }
 
@@ -6958,6 +6966,42 @@ export async function initializeApp() {
 
                 // Single click handler (when not dragging) - selection mode
                 cell.addEventListener("click", (e) => {
+                  // If in edit mode, check if value changed before exiting
+                  if (currentMode === MODES.EDIT || currentMode === MODES.ENTER) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    
+                    // Check if the editor value has changed from when edit mode was entered
+                    const currentValue = getNormalizedEditorValue();
+                    const hasChanged = currentValue !== originalEditValue;
+                    
+                    if (!hasChanged) {
+                      // Value hasn't changed, cancel like Escape - just exit without modifying cell
+                      const editingCell = window.selectedCell;
+                      const currentEditor = window.monacoEditor || editor;
+                      cancelFormulaSelection();
+                      const lastSavedFormula = getStoredFormulaText(editingCell);
+                      if (currentEditor && typeof currentEditor.setValue === 'function') {
+                        const fullValue = ensureSevenLines(lastSavedFormula || "");
+                        currentEditor.setValue(fullValue);
+                        if (typeof updateCellChips === 'function') {
+                          requestAnimationFrame(() => updateCellChips());
+                        }
+                      }
+                      clearEditingCellDisplayOverride(editingCell);
+                      setMode(MODES.READY);
+                      originalEditValue = null; // Clear stored original value
+                      // Select the clicked cell (not the editing cell)
+                      enterSelectionModeAndSelectCell(cell, { forceExit: true });
+                    } else {
+                      // Value has changed, commit the changes
+                      commitEditorChanges();
+                      // Then proceed with selecting the clicked cell
+                      enterSelectionModeAndSelectCell(cell);
+                    }
+                    return;
+                  }
+                  
                   if (currentMode !== MODES.READY) {
                     e.preventDefault();
                     e.stopPropagation();
