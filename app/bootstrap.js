@@ -614,6 +614,7 @@ export async function initializeApp() {
           let isSelectingCellForFormula = false;
           let rangeStartCellRefPosition = null; // Track the start cell of a range for range updates
           let rangeEndCellRefPosition = null; // Track the end cell reference position for updates
+          let isDragStart = false; // Track if mousedown is starting a drag
           const EDITOR_STATUS_PLACEHOLDER = "--";
 
           function formatEditorStatusValue(value) {
@@ -6405,9 +6406,70 @@ export async function initializeApp() {
           // Handle mouseup to end selection
           document.addEventListener("mouseup", () => {
             if (isSelecting) {
+              // Check if it was just a click (not a drag)
+              if (isSelectingCellForFormula && !isDragStart && lastSelectedCellRefPosition) {
+                // It was just a click - replace the last inserted reference
+                const currentEditor = window.monacoEditor || editor;
+                if (currentEditor && (currentMode === MODES.EDIT || currentMode === MODES.ENTER)) {
+                  const model = currentEditor.getModel();
+                  if (model) {
+                    const { lineNumber, columnNumber } = lastSelectedCellRefPosition;
+                    const clickedCell = selectionStart;
+                    const editingCell = window.selectedCell;
+                    
+                    if (clickedCell) {
+                      const clickedRow = parseInt(clickedCell.getAttribute("data-row"));
+                      const clickedCol = parseInt(clickedCell.getAttribute("data-col"));
+                      const cellRefText = addressToCellRef(clickedRow, clickedCol);
+                      
+                      // Find the actual reference at this position to get the exact range
+                      const fullText = model.getValue();
+                      const detectedRefs = detectCellReferences(fullText);
+                      const matchingRef = detectedRefs.find(r => {
+                        const refLine = model.getPositionAt(r.start).lineNumber;
+                        const refCol = model.getPositionAt(r.start).column;
+                        return refLine === lineNumber && refCol === columnNumber;
+                      });
+                      
+                      if (matchingRef) {
+                        const startPos = model.getPositionAt(matchingRef.start);
+                        const endPos = model.getPositionAt(matchingRef.end);
+                        const replaceRange = new monaco.Range(startPos.lineNumber, startPos.column, endPos.lineNumber, endPos.column);
+                        
+                        // Replace immediately
+                        window.isProgrammaticCursorChange = true;
+                        currentEditor.executeEdits('replace-last-reference', [{
+                          range: replaceRange,
+                          text: cellRefText
+                        }]);
+                        window.isProgrammaticCursorChange = false;
+                        
+                        // Update visual selection to new clicked cell position
+                        const allSelected = Array.from(selectedCells);
+                        allSelected.forEach(selCell => {
+                          if (selCell !== editingCell) {
+                            selCell.classList.remove("selected");
+                            selCell.removeAttribute("data-selection-edge");
+                            selectedCells.delete(selCell);
+                          }
+                        });
+                        
+                        // Add clicked cell to selection
+                        if (clickedCell && clickedCell !== editingCell) {
+                          clickedCell.classList.add("selected");
+                          selectedCells.add(clickedCell);
+                          updateHeaderHighlightsFromSelection();
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+              
               isSelecting = false;
               selectionStart = null;
               isSelectingCellForFormula = false; // Stop formula cell selection
+              isDragStart = false; // Reset drag flag
               rangeStartCellRefPosition = null;
               rangeEndCellRefPosition = null; // Reset range tracking on mouseup
             }
@@ -7360,6 +7422,7 @@ export async function initializeApp() {
                     // Value has changed - stay in edit mode and insert cell reference
                     isSelectingCellForFormula = true;
                     isSelecting = true;
+                    isDragStart = false; // Will be set to true on first mouseenter (drag)
                     selectionStart = cell; // Use clicked cell as start for range selection
                     rangeStartCellRefPosition = null;
                     rangeEndCellRefPosition = null; // Reset range tracking
@@ -7377,35 +7440,21 @@ export async function initializeApp() {
                         rangeStartCellRefPosition = lastSelectedCellRefPosition;
                       });
                       
-                      // Highlight the clicked cell (but keep anchor cell unchanged)
+                      // Update visual selection to show clicked cell
+                      const allSelected = Array.from(selectedCells);
+                      allSelected.forEach(selCell => {
+                        if (selCell !== editingCell) {
+                          selCell.classList.remove("selected");
+                          selCell.removeAttribute("data-selection-edge");
+                          selectedCells.delete(selCell);
+                        }
+                      });
+                      
+                      // Add clicked cell to selection
                       if (cell !== editingCell) {
-                        // Clear previous selection except anchor - also clear edge attributes
-                        const allSelected = Array.from(selectedCells);
-                        allSelected.forEach(selCell => {
-                          if (selCell !== editingCell) {
-                            selCell.classList.remove("selected");
-                            selCell.removeAttribute("data-selection-edge");
-                            selectedCells.delete(selCell);
-                          }
-                        });
-                        
-                        // Add clicked cell to selection
                         cell.classList.add("selected");
                         selectedCells.add(cell);
-                        
-                        // Update purple border to wrap around the single selected cell
-                        const clickedRow = parseInt(cell.getAttribute("data-row"));
-                        const clickedCol = parseInt(cell.getAttribute("data-col"));
-                        const cellRef = addressToCellRef(clickedRow, clickedCol);
-                        updateEditModeRangeHighlight(cellRef, cellRef);
-                        
                         updateHeaderHighlightsFromSelection();
-                      } else {
-                        // Clicked the anchor cell itself - show border around just the anchor
-                        const anchorRow = parseInt(editingCell.getAttribute("data-row"));
-                        const anchorCol = parseInt(editingCell.getAttribute("data-col"));
-                        const anchorRef = addressToCellRef(anchorRow, anchorCol);
-                        updateEditModeRangeHighlight(anchorRef, anchorRef);
                       }
                     }
                     
@@ -7421,6 +7470,11 @@ export async function initializeApp() {
 
                 cell.addEventListener("mouseenter", (e) => {
                   if (isSelecting && selectionStart && isSelectingCellForFormula) {
+                    // Mark as drag start on first mouseenter
+                    if (!isDragStart) {
+                      isDragStart = true;
+                    }
+                    
                     if (currentMode === MODES.EDIT || currentMode === MODES.ENTER) {
                       // In edit mode, handle range reference
                       const editingCell = window.selectedCell;
