@@ -104,6 +104,13 @@ class HarborFormulasPanel {
         const styleUri = webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'media', 'main.css'));
         // Use a nonce to only allow specific scripts to be run
         const nonce = getNonce();
+        // Debug: log URIs
+        console.log('Webview URIs:', {
+            scriptUri: scriptUri.toString(),
+            bundleCssUri: bundleCssUri.toString(),
+            styleUri: styleUri.toString(),
+            extensionUri: this._extensionUri.toString()
+        });
         return `<!DOCTYPE html>
 			<html lang="en">
 			<head>
@@ -118,15 +125,25 @@ class HarborFormulasPanel {
 				<div class="workbench">
 					<div class="grid-container">
 						<div class="grid-wrapper">
-							<div id="handsontableRoot"></div>
+							<div id="handsontableRoot" style="width: 100%; height: 100%; min-height: 400px; background: #1e1e1e;">
+								<div style="display: flex; align-items: center; justify-content: center; height: 100%; color: #cccccc;">
+									<div style="text-align: center;">
+										<h2>Harbor Formulas</h2>
+										<p>Loading spreadsheet engine...</p>
+										<p style="font-size: 11px; color: #858585;">If this message persists, check the Developer Tools console (Help > Toggle Developer Tools)</p>
+									</div>
+								</div>
+							</div>
 						</div>
 					</div>
 				</div>
 				<script nonce="${nonce}">
 					const vscode = acquireVsCodeApi();
 					window.vscode = vscode;
+					console.log('VS Code API acquired');
+					console.log('Loading bundle from:', '${scriptUri}');
 				</script>
-				<script nonce="${nonce}" src="${scriptUri}"></script>
+				<script nonce="${nonce}" src="${scriptUri}" onerror="console.error('Failed to load bundle.js:', event)" onload="console.log('bundle.js loaded successfully')"></script>
 			</body>
 			</html>`;
     }
