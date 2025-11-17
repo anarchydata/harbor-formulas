@@ -1,0 +1,58 @@
+{
+  "name": "harbor-formulas",
+  "displayName": "Harbor Formulas",
+  "description": "Spreadsheet application built on VS Code",
+  "version": "1.0.0",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "views": {
+      "explorer": [
+        {
+          "id": "harborFormulasExplorer",
+          "name": "Harbor Formulas",
+          "when": "true"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "harborFormulas.newSpreadsheet",
+        "title": "New Spreadsheet"
+      },
+      {
+        "command": "harborFormulas.openSpreadsheet",
+        "title": "Open Spreadsheet"
+      }
+    ]
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "pretest": "npm run compile && npm run lint",
+    "lint": "eslint src --ext ts",
+    "test": "node ./out/test/runTest.js"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.85.0",
+    "@types/node": "20.x",
+    "@typescript-eslint/eslint-plugin": "^6.0.0",
+    "@typescript-eslint/parser": "^6.0.0",
+    "eslint": "^8.0.0",
+    "typescript": "^5.0.0"
+  },
+  "dependencies": {
+    "handsontable": "^16.1.1",
+    "hyperformula": "^3.1.0"
+  }
+}
+
