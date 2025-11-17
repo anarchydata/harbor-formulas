@@ -1,0 +1,14 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Run Harbor Formulas Extension",
+      "type": "extensionHost",
+      "request": "launch",
+      "args": ["--extensionDevelopmentPath=${workspaceFolder}/apps/harbor-vscode"],
+      "outFiles": ["${workspaceFolder}/apps/harbor-vscode/out/**/*.js"],
+      "preLaunchTask": "build-extension"
+    }
+  ]
+}
+

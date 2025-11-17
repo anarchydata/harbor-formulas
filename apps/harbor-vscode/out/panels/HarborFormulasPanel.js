@@ -73,6 +73,12 @@ class HarborFormulasPanel {
                 case 'alert':
                     vscode.window.showErrorMessage(message.text);
                     return;
+                case 'error':
+                    vscode.window.showErrorMessage(`Harbor Formulas: ${message.text}`);
+                    return;
+                case 'initialized':
+                    console.log('Harbor Formulas webview initialized');
+                    return;
             }
         }, null, this._disposables);
     }
@@ -93,7 +99,8 @@ class HarborFormulasPanel {
     }
     _getHtmlForWebview(webview) {
         // Get paths to resources
-        const scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'media', 'main.js'));
+        const scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'media', 'bundle.js'));
+        const bundleCssUri = webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'media', 'bundle.css'));
         const styleUri = webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'media', 'main.css'));
         // Use a nonce to only allow specific scripts to be run
         const nonce = getNonce();
@@ -101,8 +108,9 @@ class HarborFormulasPanel {
 			<html lang="en">
 			<head>
 				<meta charset="UTF-8">
-				<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}' https://cdn.jsdelivr.net; connect-src https:;">
+				<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}' ${webview.cspSource};">
 				<meta name="viewport" content="width=device-width, initial-scale=1.0">
+				<link href="${bundleCssUri}" rel="stylesheet">
 				<link href="${styleUri}" rel="stylesheet">
 				<title>Harbor Formulas</title>
 			</head>
