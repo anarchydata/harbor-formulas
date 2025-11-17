@@ -6406,11 +6406,14 @@ export async function initializeApp() {
           // Handle mouseup to end selection
           document.addEventListener("mouseup", () => {
             if (isSelecting) {
-              // Check if it was just a click (not a drag)
-              if (isSelectingCellForFormula && !isDragStart && lastSelectedCellRefPosition) {
+              // Only handle edit mode replacement if we're actually in edit mode
+              const isInEditMode = currentMode === MODES.EDIT || currentMode === MODES.ENTER;
+              
+              // Check if it was just a click (not a drag) AND we're in edit mode
+              if (isInEditMode && isSelectingCellForFormula && !isDragStart && lastSelectedCellRefPosition) {
                 // It was just a click - replace the last inserted reference
                 const currentEditor = window.monacoEditor || editor;
-                if (currentEditor && (currentMode === MODES.EDIT || currentMode === MODES.ENTER)) {
+                if (currentEditor) {
                   const model = currentEditor.getModel();
                   if (model) {
                     const { lineNumber, columnNumber } = lastSelectedCellRefPosition;
@@ -6436,6 +6439,9 @@ export async function initializeApp() {
                         const endPos = model.getPositionAt(matchingRef.end);
                         const replaceRange = new monaco.Range(startPos.lineNumber, startPos.column, endPos.lineNumber, endPos.column);
                         
+                        // Get the text that will be deleted
+                        const textToDelete = model.getValueInRange(replaceRange);
+                        
                         // Replace immediately
                         window.isProgrammaticCursorChange = true;
                         currentEditor.executeEdits('replace-last-reference', [{
@@ -6444,34 +6450,59 @@ export async function initializeApp() {
                         }]);
                         window.isProgrammaticCursorChange = false;
                         
-                        // Update visual selection to new clicked cell position
-                        const allSelected = Array.from(selectedCells);
-                        allSelected.forEach(selCell => {
-                          if (selCell !== editingCell) {
-                            selCell.classList.remove("selected");
-                            selCell.removeAttribute("data-selection-edge");
-                            selectedCells.delete(selCell);
+                        // Log after replacement reference is known
+                        console.log(`Delete ${textToDelete} replaced with ${cellRefText}`);
+                        
+                        // Defer visual selection update until after editor renders
+                        requestAnimationFrame(() => {
+                          // Update visual selection to new clicked cell position - batched DOM updates
+                          // Check if already selected to skip rendering
+                          const isAlreadySelected = clickedCell && clickedCell !== editingCell && clickedCell.classList.contains("selected");
+                          
+                          if (!isAlreadySelected) {
+                            // Clear all selections first (except anchor) - batch operation
+                            const allSelectedCells = document.querySelectorAll('.selected');
+                            for (let i = 0; i < allSelectedCells.length; i++) {
+                              const selCell = allSelectedCells[i];
+                              if (selCell !== editingCell) {
+                                selCell.classList.remove("selected");
+                                selCell.removeAttribute("data-selection-edge");
+                                selectedCells.delete(selCell);
+                              }
+                            }
+                            
+                            // Add clicked cell to selection in one operation
+                            if (clickedCell && clickedCell !== editingCell) {
+                              clickedCell.classList.add("selected");
+                              selectedCells.add(clickedCell);
+                              updateHeaderHighlightsFromSelection();
+                            }
                           }
                         });
-                        
-                        // Add clicked cell to selection
-                        if (clickedCell && clickedCell !== editingCell) {
-                          clickedCell.classList.add("selected");
-                          selectedCells.add(clickedCell);
-                          updateHeaderHighlightsFromSelection();
-                        }
                       }
                     }
                   }
                 }
               }
               
+              // Reset selection state
               isSelecting = false;
               selectionStart = null;
-              isSelectingCellForFormula = false; // Stop formula cell selection
-              isDragStart = false; // Reset drag flag
-              rangeStartCellRefPosition = null;
-              rangeEndCellRefPosition = null; // Reset range tracking on mouseup
+              isDragStart = false;
+              
+              // Only reset edit-mode-specific variables if we're in edit mode
+              if (isInEditMode) {
+                isSelectingCellForFormula = false; // Stop formula cell selection
+                rangeStartCellRefPosition = null;
+                rangeEndCellRefPosition = null; // Reset range tracking on mouseup
+              } else {
+                // In ready mode, ensure selection overlay is updated after mouseup
+                if (selectedCells && selectedCells.size > 0) {
+                  requestAnimationFrame(() => {
+                    updateSelectionOverlay();
+                  });
+                }
+              }
             }
           });
 
@@ -7440,21 +7471,28 @@ export async function initializeApp() {
                         rangeStartCellRefPosition = lastSelectedCellRefPosition;
                       });
                       
-                      // Update visual selection to show clicked cell
-                      const allSelected = Array.from(selectedCells);
-                      allSelected.forEach(selCell => {
-                        if (selCell !== editingCell) {
-                          selCell.classList.remove("selected");
-                          selCell.removeAttribute("data-selection-edge");
-                          selectedCells.delete(selCell);
-                        }
-                      });
+                      // Update visual selection to show clicked cell - batched DOM updates
+                      // Check if already selected to skip rendering
+                      const isAlreadySelected = cell !== editingCell && cell.classList.contains("selected");
                       
-                      // Add clicked cell to selection
-                      if (cell !== editingCell) {
-                        cell.classList.add("selected");
-                        selectedCells.add(cell);
-                        updateHeaderHighlightsFromSelection();
+                      if (!isAlreadySelected) {
+                        // Clear all selections first (except anchor) - batch operation
+                        const allSelectedCells = document.querySelectorAll('.selected');
+                        for (let i = 0; i < allSelectedCells.length; i++) {
+                          const selCell = allSelectedCells[i];
+                          if (selCell !== editingCell) {
+                            selCell.classList.remove("selected");
+                            selCell.removeAttribute("data-selection-edge");
+                            selectedCells.delete(selCell);
+                          }
+                        }
+                        
+                        // Add clicked cell to selection in one operation
+                        if (cell !== editingCell) {
+                          cell.classList.add("selected");
+                          selectedCells.add(cell);
+                          updateHeaderHighlightsFromSelection();
+                        }
                       }
                     }
                     
@@ -7469,13 +7507,20 @@ export async function initializeApp() {
                 });
 
                 cell.addEventListener("mouseenter", (e) => {
-                  if (isSelecting && selectionStart && isSelectingCellForFormula) {
+                  if (isSelecting && selectionStart) {
                     // Mark as drag start on first mouseenter
                     if (!isDragStart) {
                       isDragStart = true;
                     }
                     
-                    if (currentMode === MODES.EDIT || currentMode === MODES.ENTER) {
+                    // Handle ready mode selection
+                    if (currentMode === MODES.READY && !isSelectingCellForFormula) {
+                      selectRange(selectionStart, cell);
+                      return;
+                    }
+                    
+                    // Handle edit mode selection
+                    if (isSelectingCellForFormula && (currentMode === MODES.EDIT || currentMode === MODES.ENTER)) {
                       // In edit mode, handle range reference
                       const editingCell = window.selectedCell;
                       if (editingCell && cell !== selectionStart && cell !== editingCell) {
@@ -7589,29 +7634,37 @@ export async function initializeApp() {
                         const minCol = Math.min(startCol, clickedColNum);
                         const maxCol = Math.max(startCol, clickedColNum);
                         
-                        // Clear previous selection except anchor - also clear edge attributes
-                        const allSelected = Array.from(selectedCells);
-                        allSelected.forEach(selCell => {
+                        // Clear previous selection except anchor - batched DOM updates
+                        const allSelectedCells = document.querySelectorAll('.selected');
+                        for (let i = 0; i < allSelectedCells.length; i++) {
+                          const selCell = allSelectedCells[i];
                           if (selCell !== editingCell) {
                             selCell.classList.remove("selected");
                             selCell.removeAttribute("data-selection-edge");
                             selectedCells.delete(selCell);
                           }
-                        });
+                        }
                         
-                        // Add range cells (anchor is already selected)
+                        // Add range cells (anchor is already selected) - batch operation
+                        const cellsToAdd = [];
                         for (let r = minRow; r <= maxRow; r++) {
                           for (let c = minCol; c <= maxCol; c++) {
                             const rangeCell = gridBody.querySelector(`tr[data-row="${r}"] td[data-col="${c}"]`);
                             if (rangeCell && rangeCell !== editingCell) {
                               // Skip row headers (first column)
                               const isRowHeader = rangeCell === rangeCell.parentElement.querySelector("td:first-child");
-                              if (!isRowHeader) {
-                                rangeCell.classList.add("selected");
-                                selectedCells.add(rangeCell);
+                              if (!isRowHeader && !rangeCell.classList.contains("selected")) {
+                                cellsToAdd.push(rangeCell);
                               }
                             }
                           }
+                        }
+                        
+                        // Batch add all cells at once
+                        for (let i = 0; i < cellsToAdd.length; i++) {
+                          const rangeCell = cellsToAdd[i];
+                          rangeCell.classList.add("selected");
+                          selectedCells.add(rangeCell);
                         }
                         
                         // Don't show purple border - code editor will draw border automatically
@@ -7626,8 +7679,6 @@ export async function initializeApp() {
                         
                         updateHeaderHighlightsFromSelection();
                       }
-                    } else {
-                      selectRange(selectionStart, cell);
                     }
                   }
                 });
