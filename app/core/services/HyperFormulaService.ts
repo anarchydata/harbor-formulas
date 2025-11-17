@@ -31,7 +31,7 @@ export class HyperFormulaService extends BaseService {
     this.rawFormulaStore = new Map();
 
     // Add Sheet1
-    const sheetName = this.hf.addSheet('Sheet1');
+    this.hf.addSheet('Sheet1');
     this.sheetId = 0;
 
     // Verify the sheet exists
