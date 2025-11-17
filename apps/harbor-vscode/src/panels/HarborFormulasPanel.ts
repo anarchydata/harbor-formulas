@@ -100,7 +100,7 @@ export class HarborFormulasPanel {
 			<html lang="en">
 			<head>
 				<meta charset="UTF-8">
-				<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource}; script-src 'nonce-${nonce}';">
+				<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}' https://cdn.jsdelivr.net; connect-src https:;">
 				<meta name="viewport" content="width=device-width, initial-scale=1.0">
 				<link href="${styleUri}" rel="stylesheet">
 				<title>Harbor Formulas</title>
@@ -113,6 +113,10 @@ export class HarborFormulasPanel {
 						</div>
 					</div>
 				</div>
+				<script nonce="${nonce}">
+					const vscode = acquireVsCodeApi();
+					window.vscode = vscode;
+				</script>
 				<script nonce="${nonce}" src="${scriptUri}"></script>
 			</body>
 			</html>`;
