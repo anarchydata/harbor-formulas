@@ -2089,3 +2089,55 @@ td.fill-preview .grid-cell-display {
   height: 2px;
 }
 
+/* Handsontable Custom Dark Theme - DISABLED to let Handsontable use native dark theme */
+/* .handsontable-root.handsontable {
+  background: #000000;
+  color: #cccccc;
+} */
+
+/* Main table background - DISABLED */
+/* .handsontable-root .ht_master,
+.handsontable-root .ht_clone_top,
+.handsontable-root .ht_clone_left,
+.handsontable-root .ht_clone_corner,
+.handsontable-root .ht_master .wtHolder {
+  background: #000000;
+} */
+
+/* Cell background - DISABLED */
+/* .handsontable-root .htCore td {
+  background: #000000 !important;
+  color: #cccccc !important;
+  border-right: 0.5px solid #2d2d30 !important;
+  border-bottom: 0.5px solid #2d2d30 !important;
+  font-family: "Consolas", "Courier New", monospace;
+  font-size: 12px;
+} */
+
+/* Cell hover - DISABLED */
+/* .handsontable-root .htCore td:hover {
+  background: #1a1a1a !important;
+} */
+
+/* Selected cell - DISABLED */
+/* .handsontable-root .htCore td.area,
+.handsontable-root .htCore td.current {
+  background: rgba(200, 200, 200, 0.3) !important;
+} */
+
+/* Selection border - DISABLED */
+/* .handsontable-root .htCore td.area,
+.handsontable-root .htCore td.current,
+.handsontable-root .htCore td.area.current {
+  border-top: 1px solid #569CD6 !important;
+  border-right: 1px solid #569CD6 !important;
+  border-bottom: 1px solid #569CD6 !important;
+  border-left: 1px solid #569CD6 !important;
+  outline: none !important;
+  box-shadow: none !important;
+} */
+
+/* All Handsontable CSS overrides DISABLED - using native dark theme */
+/* Handsontable's ht-theme-main-dark theme will handle all styling */
+/* Removed all custom CSS to let Handsontable render natively */
+

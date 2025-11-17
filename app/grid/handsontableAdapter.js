@@ -1,10 +1,13 @@
 import Handsontable from 'handsontable';
 import 'handsontable/dist/handsontable.full.css';
+import 'handsontable/styles/ht-theme-main.css';
 
 import { addressToCellRef } from '../../utils/helpers.js';
 
 const DEFAULT_ROWS = 150;
 const DEFAULT_COLUMNS = 50;
+
+// Use built-in dark theme
 
 function columnLabelFromIndex(index = 0) {
   let label = '';
@@ -29,16 +32,57 @@ export function createHandsontableGrid({
     throw new Error('Handsontable container element is required');
   }
 
-  const data = Handsontable.helper.createEmptySpreadsheetData(rows, columns);
+  // Add dark theme class to container (Handsontable applies theme via class)
+  container.classList.add('ht-theme-main-dark');
+
+  console.log('Creating Handsontable grid with container:', container);
   
-  // Calculate height based on container's parent (grid-wrapper-inner) or use a default
-  // Wait for next frame to ensure container is laid out
-  let containerHeight = 600;
-  const parent = container.parentElement;
-  if (parent) {
-    // Try to get height from parent, fallback to viewport calculation
-    containerHeight = parent.offsetHeight || window.innerHeight * 0.6 || 600;
+  // Function to get actual container dimensions
+  const getContainerDimensions = () => {
+    const rect = container.getBoundingClientRect();
+    const parent = container.parentElement;
+    const parentRect = parent ? parent.getBoundingClientRect() : null;
+    
+    return {
+      width: rect.width || container.offsetWidth,
+      height: rect.height || container.offsetHeight,
+      parentWidth: parentRect?.width || parent?.offsetWidth || 0,
+      parentHeight: parentRect?.height || parent?.offsetHeight || 0,
+      computed: {
+        width: window.getComputedStyle(container).width,
+        height: window.getComputedStyle(container).height
+      }
+    };
+  };
+  
+  const dims = getContainerDimensions();
+  console.log('Container dimensions:', dims);
+  
+  // Calculate height - use actual computed dimensions or fallback
+  let containerHeight = dims.height || dims.parentHeight || window.innerHeight * 0.6 || 600;
+  let containerWidth = dims.width || dims.parentWidth || '100%';
+  
+  // If container has no height, wait for layout and use parent or viewport
+  if (containerHeight === 0 || containerHeight < 100) {
+    console.warn('Container has zero/small height, using calculated height');
+    // Try to get from parent chain
+    let current = container.parentElement;
+    while (current && containerHeight < 100) {
+      const h = current.offsetHeight || current.getBoundingClientRect().height;
+      if (h > 0) {
+        containerHeight = h;
+        break;
+      }
+      current = current.parentElement;
+    }
+    // Fallback to viewport
+    if (containerHeight < 100) {
+      containerHeight = window.innerHeight * 0.6;
+    }
+    console.log('Using calculated height:', containerHeight);
   }
+
+  const data = Handsontable.helper.createEmptySpreadsheetData(rows, columns);
   
   const hot = new Handsontable(container, {
     data,
@@ -46,9 +90,9 @@ export function createHandsontableGrid({
     colHeaders: (index) => columnLabelFromIndex(index),
     readOnly: true,
     height: containerHeight,
-    width: '100%',
+    width: containerWidth,
     licenseKey: 'non-commercial-and-evaluation',
-    theme: 'modern', // Use modern theme instead of deprecated classic
+    themeName: 'ht-theme-main-dark', // Theme name with obligatory 'ht-theme-*' prefix
     selectionMode: 'multiple',
     outsideClickDeselects: false,
     disableVisualSelection: false, // Enable Handsontable's native visual selection
@@ -115,6 +159,37 @@ export function createHandsontableGrid({
       }
     }
   });
+
+  // Force render after container is laid out
+  // Use multiple attempts to ensure it renders
+  const ensureRender = () => {
+    if (hot && typeof hot.render === 'function') {
+      const dims = getContainerDimensions();
+      console.log('Rendering Handsontable with dimensions:', dims);
+      
+      // Update height if container now has dimensions
+      if (dims.height > 0 && dims.height !== containerHeight) {
+        hot.updateSettings({ height: dims.height });
+      }
+      
+      hot.render();
+      console.log('Handsontable rendered, root element:', hot.rootElement);
+      
+      // Verify it actually rendered
+      const body = hot.rootElement?.querySelector('.ht_master .htCore tbody');
+      if (body) {
+        console.log('Handsontable body element found:', body);
+      } else {
+        console.warn('Handsontable body element not found after render');
+      }
+    }
+  };
+  
+  // Try immediate render
+  requestAnimationFrame(ensureRender);
+  
+  // Also try after a short delay in case layout isn't ready
+  setTimeout(ensureRender, 100);
 
   function getBodyElement() {
     return hot.rootElement.querySelector('.ht_master .htCore tbody');

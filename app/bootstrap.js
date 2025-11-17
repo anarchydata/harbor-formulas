@@ -24,6 +24,7 @@ import { initClappyChat } from './ui/clappyChat.js';
 
 export async function initializeApp() {
         console.log("DOMContentLoaded fired");
+        console.log("=== START OF TRY BLOCK ===");
         try {
           // Initialize HyperFormula
           console.log("Loading HyperFormula...");
@@ -309,13 +310,9 @@ export async function initializeApp() {
           const chipHighlightedCells = new Map();
           let nextChipColorIndex = 0;
           let isFormulaSelecting = false;
-          let selectedCells = new Set();
-          window.selectedCells = selectedCells;
+          // Selection is now handled by Handsontable natively
           const highlightedRowHeaders = new Set();
           const highlightedColumnHeaders = new Set();
-          let isSelecting = false;
-          let selectionStart = null;
-          let selectionAnchorCell = null;
           let selectionDragState = null;
           let isEditMode = false;
           let suppressNextDocumentEnter = false;
@@ -680,7 +677,10 @@ export async function initializeApp() {
                 if (isEditMode) {
                   return;
                 }
-                if (!selectedCells || selectedCells.size === 0) {
+                // Check if there's a selection in Handsontable
+                if (!window.handsontableInstance) return;
+                const selection = window.handsontableInstance.getSelected();
+                if (!selection || selection.length === 0) {
                   return;
                 }
                 startSelectionDrag(event);
@@ -731,51 +731,24 @@ export async function initializeApp() {
           }
 
           function updateHeaderHighlightsFromSelection() {
-            if (!selectedCells || selectedCells.size === 0) {
+            // Use Handsontable's native selection API
+            if (!window.handsontableInstance) {
               clearHeaderHighlights();
               return;
             }
-
-            const rows = [];
-            const cols = [];
-
-            selectedCells.forEach(cell => {
-              const rowAttr = cell.getAttribute("data-row");
-              const fallbackRowAttr = cell.getAttribute("data-row-index");
-              const colAttr = cell.getAttribute("data-col");
-              const fallbackColAttr = cell.getAttribute("data-col-index");
-
-              const rowValue = rowAttr ?? fallbackRowAttr;
-              const colValue = colAttr ?? fallbackColAttr;
-
-              if (rowValue !== null && rowValue !== undefined) {
-                const parsedRow = parseInt(rowValue, 10);
-                if (!Number.isNaN(parsedRow)) {
-                  rows.push(parsedRow);
-                }
-              }
-
-              if (colValue !== null && colValue !== undefined) {
-                const parsedCol = parseInt(colValue, 10);
-                if (!Number.isNaN(parsedCol)) {
-                  cols.push(parsedCol);
-                }
-              }
-            });
-
-            const hasRowSelection = rows.length > 0;
-            const hasColSelection = cols.length > 0;
-
-            if (!hasRowSelection && !hasColSelection) {
+            
+            const selection = window.handsontableInstance.getSelected();
+            if (!selection || selection.length === 0) {
               clearHeaderHighlights();
               return;
             }
-
-            const minRow = hasRowSelection ? Math.min(...rows) : null;
-            const maxRow = hasRowSelection ? Math.max(...rows) : null;
-            const minCol = hasColSelection ? Math.min(...cols) : null;
-            const maxCol = hasColSelection ? Math.max(...cols) : null;
-
+            
+            const [startRow, startCol, endRow, endCol] = selection[0];
+            const minRow = Math.min(startRow, endRow);
+            const maxRow = Math.max(startRow, endRow);
+            const minCol = Math.min(startCol, endCol);
+            const maxCol = Math.max(startCol, endCol);
+            
             applyHeaderHighlights(minRow, maxRow, minCol, maxCol);
           }
 
@@ -1192,6 +1165,94 @@ export async function initializeApp() {
 
           if (!clappyTranscript || !clappyForm || !clappyInput) {
             console.warn("Clappy elements not found, continuing without chat UI.");
+          }
+
+          // Removed legacy event handlers - Handsontable handles all interactions natively
+
+          // Define buildGrid function early so it's available when called from Monaco callback
+          function buildGrid(rows = 150, columns = 50) {
+            console.log("=== buildGrid FUNCTION DEFINITION ===");
+            console.log("buildGrid function called with rows:", rows, "columns:", columns);
+            console.log("handsontableRoot inside buildGrid:", handsontableRoot);
+            window.totalGridRows = rows;
+            window.totalGridColumns = columns;
+            
+            if (!handsontableRoot) {
+              console.error("handsontableRoot not found! Cannot create grid.");
+              return;
+            }
+            
+            console.log("Calling createHandsontableGrid...");
+            try {
+              // Create Handsontable instance
+              handsontableController = createHandsontableGrid({
+                container: handsontableRoot,
+                rows,
+                columns,
+                onCellRender: (cellElement, row, column) => {
+                  // Handsontable handles all interactions natively - no custom listeners needed
+                  // Just ensure data attributes are set for compatibility
+                  if (cellElement) {
+                    cellElement.dataset.row = row;
+                    cellElement.dataset.col = column;
+                    cellElement.dataset.ref = addressToCellRef(row, column);
+                  }
+                },
+                onSelection: (startRow, startCol, endRow, endCol) => {
+                  // Handsontable handles selection natively - minimal update for compatibility
+                  try {
+                    const body = handsontableController?.getBodyElement();
+                    if (body) {
+                      const cell = body.querySelector(`td[data-row="${startRow}"][data-col="${startCol}"]`);
+                      if (cell) {
+                        window.selectedCell = cell;
+                      }
+                    }
+                  } catch (e) {
+                    // Ignore errors - Handsontable will handle selection
+                  }
+                },
+                onDoubleClick: (event, coords, TD) => {
+                  // Handsontable handles double-click natively for editing
+                  // No custom handling needed
+                },
+                onBeforeKeyDown: (event) => {
+                  // Handsontable handles all keyboard interactions natively
+                  // Let it handle everything
+                  return true;
+                }
+              });
+
+              // Update references to use Handsontable's DOM
+              gridBody = handsontableController.getBodyElement();
+              gridHeaderElement = handsontableController.getHeaderElement();
+              rowHeaderElement = handsontableController.getRowHeaderElement();
+
+              // Store Handsontable instance globally for access elsewhere
+              window.handsontableInstance = handsontableController.hot;
+
+              // Initialize HyperFormula adapter for syncing data
+              if (window.hf && handsontableController) {
+                window.hyperFormulaAdapter = createHyperFormulaAdapter({
+                  hfInstance: window.hf,
+                  handsontableController: handsontableController,
+                  sheetId: 0
+                });
+                console.log("HyperFormula adapter initialized");
+              }
+
+              // Update height after a brief delay to ensure container is laid out
+              requestAnimationFrame(() => {
+                if (handsontableController.updateHeight) {
+                  handsontableController.updateHeight();
+                }
+              });
+
+              console.log("Handsontable grid created successfully");
+            } catch (error) {
+              console.error("Error creating Handsontable grid:", error);
+              throw error;
+            }
           }
 
           // Load Monaco in background - don't wait for it
@@ -4454,6 +4515,44 @@ export async function initializeApp() {
 
                   window.monacoEditor = editor;
                   console.log("Monaco Editor created successfully", editor);
+                  
+                  // Initialize UI components after Monaco is ready
+                  console.log("=== INITIALIZING UI COMPONENTS AFTER MONACO ===");
+                  try {
+                    console.log("About to call initResizablePanes()");
+                    initResizablePanes();
+                    console.log("initResizablePanes() completed");
+                  } catch (error) {
+                    console.error("Error in initResizablePanes():", error);
+                  }
+
+                  try {
+                    console.log("About to call initClappyChat()");
+                    initClappyChat({
+                      transcript: clappyTranscript,
+                      form: clappyForm,
+                      input: clappyInput,
+                      chatToggle: chatCollapseToggle,
+                      consoleEl: clappyConsole,
+                      chatContainer: mainChatContainer,
+                      middleSection,
+                      gridContainer
+                    });
+                    console.log("initClappyChat() completed");
+                  } catch (error) {
+                    console.error("Error in initClappyChat():", error);
+                  }
+
+                  // Build grid immediately - don't wait for Monaco
+                  console.log("About to call buildGrid()");
+                  console.log("handsontableRoot element:", handsontableRoot);
+                  console.log("handsontableRoot exists?", !!handsontableRoot);
+                  try {
+                    buildGrid();
+                    console.log("buildGrid() called successfully");
+                  } catch (error) {
+                    console.error("Error calling buildGrid():", error);
+                  }
 
                   // Add click listener to Monaco editor to enter edit mode when clicked
                   const editorDomNode = editor.getDomNode();
@@ -4512,7 +4611,11 @@ export async function initializeApp() {
                 // Continue without Monaco - grid should still work
               });
             }, 100);
+            
+            console.log("Monaco Editor setup scheduled (will execute after 100ms delay)");
           }
+          
+          console.log("Code execution continuing after Monaco Editor setup block");
 
           // Function to enter edit mode for a cell
           function enterEditMode(cell, clickPosition, options = {}) {
@@ -4536,11 +4639,7 @@ export async function initializeApp() {
               fillHandleElement.style.display = "none";
             }
 
-            clearSelection();
-            selectedCells.add(cell);
-            cell.classList.add("selected");
-            cell.classList.add("edit-mode");
-            cell.setAttribute("data-selection-edge", "top bottom left right");
+            // Selection is handled by Handsontable - just update window.selectedCell
             window.selectedCell = cell;
             // Reset tracking variables for cell reference insertion
             lastSelectedCellRefPosition = null;
@@ -5067,32 +5166,22 @@ export async function initializeApp() {
           }
 
           function getSelectionBounds() {
-            if (!selectedCells || selectedCells.size === 0) {
+            // Use Handsontable's native selection API
+            if (!window.handsontableInstance) {
               return null;
             }
-            let minRow = Number.POSITIVE_INFINITY;
-            let maxRow = Number.NEGATIVE_INFINITY;
-            let minCol = Number.POSITIVE_INFINITY;
-            let maxCol = Number.NEGATIVE_INFINITY;
-            selectedCells.forEach((cell) => {
-              const rowAttr = cell.getAttribute("data-row");
-              const colAttr = cell.getAttribute("data-col");
-              if (rowAttr === null || colAttr === null) {
-                return;
-              }
-              const row = parseInt(rowAttr, 10);
-              const col = parseInt(colAttr, 10);
-              if (Number.isNaN(row) || Number.isNaN(col)) {
-                return;
-              }
-              minRow = Math.min(minRow, row);
-              maxRow = Math.max(maxRow, row);
-              minCol = Math.min(minCol, col);
-              maxCol = Math.max(maxCol, col);
-            });
-            if (!Number.isFinite(minRow) || !Number.isFinite(minCol)) {
+            
+            const selection = window.handsontableInstance.getSelected();
+            if (!selection || selection.length === 0) {
               return null;
             }
+            
+            const [startRow, startCol, endRow, endCol] = selection[0];
+            const minRow = Math.min(startRow, endRow);
+            const maxRow = Math.max(startRow, endRow);
+            const minCol = Math.min(startCol, endCol);
+            const maxCol = Math.max(startCol, endCol);
+            
             return {
               minRow,
               maxRow,
@@ -5104,18 +5193,33 @@ export async function initializeApp() {
           }
 
           function clearSelectedCellContents() {
-            if (!selectedCells || selectedCells.size === 0) {
+            // Use Handsontable's native selection API
+            if (!window.handsontableInstance) {
               return false;
             }
+            
+            const selection = window.handsontableInstance.getSelected();
+            if (!selection || selection.length === 0) {
+              return false;
+            }
+            
             let clearedAny = false;
-            selectedCells.forEach((cell) => {
-              const cellRef = cell.getAttribute("data-ref");
-              if (cellRef) {
-                setCellValue(cellRef, "", { rawFormula: "" });
-                cell.removeAttribute("data-formula");
-                clearedAny = true;
+            const [startRow, startCol, endRow, endCol] = selection[0];
+            const minRow = Math.min(startRow, endRow);
+            const maxRow = Math.max(startRow, endRow);
+            const minCol = Math.min(startCol, endCol);
+            const maxCol = Math.max(startCol, endCol);
+            
+            // Clear all cells in the selection
+            for (let r = minRow; r <= maxRow; r++) {
+              for (let c = minCol; c <= maxCol; c++) {
+                const cellRef = addressToCellRef(r, c);
+                if (cellRef) {
+                  setCellValue(cellRef, "", { rawFormula: "" });
+                  clearedAny = true;
+                }
               }
-            });
+            }
             if (clearedAny && typeof updateCellChips === "function") {
               requestAnimationFrame(() => updateCellChips());
             }
@@ -5495,27 +5599,27 @@ export async function initializeApp() {
 
           // Function to update the cell range pill
           function updateCellRangePill() {
-            if (selectedCells.size === 0) {
+            // Get selection from Handsontable
+            if (!window.handsontableInstance) {
               currentSelectionLabel = "";
               updateModeIndicatorElements();
               return;
             }
-
-            const cellsArray = Array.from(selectedCells);
-            const rows = cellsArray.map(cell => parseInt(cell.getAttribute("data-row"))).filter(r => !isNaN(r));
-            const cols = cellsArray.map(cell => parseInt(cell.getAttribute("data-col"))).filter(c => !isNaN(c));
-
-            if (rows.length === 0 || cols.length === 0) {
+            
+            const selection = window.handsontableInstance.getSelected();
+            if (!selection || selection.length === 0) {
               currentSelectionLabel = "";
               updateModeIndicatorElements();
               return;
             }
-
-            const minRow = Math.min(...rows);
-            const maxRow = Math.max(...rows);
-            const minCol = Math.min(...cols);
-            const maxCol = Math.max(...cols);
-
+            
+            const [startRow, startCol, endRow, endCol] = selection[0];
+            const minRow = Math.min(startRow, endRow);
+            const maxRow = Math.max(startRow, endRow);
+            const minCol = Math.min(startCol, endCol);
+            const maxCol = Math.max(startCol, endCol);
+            
+            // minRow, maxRow, minCol, maxCol already calculated from selection above
             if (minRow === maxRow && minCol === maxCol) {
               currentSelectionLabel = getCellReference(minRow, minCol);
             } else {
@@ -5525,16 +5629,26 @@ export async function initializeApp() {
           }
 
           // Function to clear all selections (without updating pill)
-          function clearSelection() {
-            selectedCells.forEach(cell => {
-              cell.classList.remove("selected");
-              cell.classList.remove("edit-mode"); // Remove edit-mode class when clearing selection
-              cell.removeAttribute("data-selection-edge");
-            });
-            selectedCells.clear();
-            selectionAnchorCell = null;
-            clearFillPreview();
+          // Selection clearing is now handled by Handsontable
+          // Helper functions for Handsontable selection
+          function getSelectedCellFromHandsontable() {
+            if (!window.handsontableInstance) return null;
+            const selection = window.handsontableInstance.getSelected();
+            if (!selection || selection.length === 0) return null;
+            const [startRow, startCol] = selection[0];
+            const body = window.handsontableController?.getBodyElement();
+            if (!body) return null;
+            return body.querySelector(`td[data-row="${startRow}"][data-col="${startCol}"]`);
+          }
 
+          function clearSelection() {
+            if (window.handsontableInstance) {
+              window.handsontableInstance.deselectCell();
+            }
+            clearFillPreview();
+            clearHeaderHighlights();
+            window.selectedCell = null;
+            
             // Remove edit-mode class from editor-wrapper when clearing selection
             if (currentMode !== MODES.EDIT) {
               const editorWrapper = document.querySelector('.editor-wrapper');
@@ -5542,151 +5656,43 @@ export async function initializeApp() {
                 editorWrapper.classList.remove('editor-edit-mode');
               }
             }
-
-            // Hide selection overlay and fill handle
-            if (selectionOverlayElement) {
-              selectionOverlayElement.style.display = "none";
-            }
-            if (fillHandleElement) {
-              fillHandleElement.style.display = "none";
-            }
-            clearHeaderHighlights();
           }
 
-          // Function to update the selection overlay rectangle
+          // Selection overlay is now handled by Handsontable natively - no-op
           function updateSelectionOverlay() {
-            const overlay = selectionOverlayElement;
-            if (!overlay) {
-              return;
-            }
-
-            if (isEditMode) {
-              // In edit mode, show purple border for selected range, blue overlay for anchor cell only
-              const editingCell = window.selectedCell;
-              
-              // Show purple border for selected range if active (this is the range being selected, not the anchor)
-              if (editModeRangeHighlight.active && editModeRangeHighlight.bounds) {
-                positionElementForBounds(overlay, editModeRangeHighlight.bounds);
-                // Style as purple border for the selected range
-                overlay.style.borderColor = '#9d7fe8'; // Purple color
-                overlay.style.animation = 'none'; // No animation in edit mode
-                overlay.style.display = 'block';
-              } else if (editingCell && selectedCells.has(editingCell)) {
-                // No range selected - show blue overlay only for anchor cell
-                const cells = [editingCell];
-                const gridRect = gridWrapperInner.getBoundingClientRect();
-                let minLeft = Infinity;
-                let minTop = Infinity;
-                let maxRight = -Infinity;
-                let maxBottom = -Infinity;
-                
-                cells.forEach(cell => {
-                  const cellRect = cell.getBoundingClientRect();
-                  const relativeLeft = cellRect.left - gridRect.left + gridWrapperInner.scrollLeft;
-                  const relativeTop = cellRect.top - gridRect.top + gridWrapperInner.scrollTop;
-                  const relativeRight = relativeLeft + cellRect.width;
-                  const relativeBottom = relativeTop + cellRect.height;
-                  
-                  minLeft = Math.min(minLeft, relativeLeft);
-                  minTop = Math.min(minTop, relativeTop);
-                  maxRight = Math.max(maxRight, relativeRight);
-                  maxBottom = Math.max(maxBottom, relativeBottom);
-                });
-                
-                overlay.style.left = `${minLeft}px`;
-                overlay.style.top = `${minTop}px`;
-                overlay.style.width = `${maxRight - minLeft}px`;
-                overlay.style.height = `${maxBottom - minTop}px`;
-                overlay.style.borderColor = '#569CD6'; // Blue color for anchor
-                overlay.style.animation = 'tranquilPulseUniform 4s ease-in-out infinite';
-                overlay.style.display = 'block';
-              } else {
-                overlay.style.display = "none";
-              }
-              if (fillHandleElement) {
-                fillHandleElement.style.display = "none";
-              }
-              return;
-            }
-
-            if (selectedCells.size === 0) {
-              overlay.style.display = "none";
-              if (fillHandleElement) {
-                fillHandleElement.style.display = "none";
-              }
-              return;
-            }
-
-            // Get all selected cells (excluding anchor cell if in edit mode to avoid blue overlay on range)
-            const cells = Array.from(selectedCells);
-            if (cells.length === 0) {
-              overlay.style.display = "none";
-              return;
-            }
-
-            // Get the grid wrapper inner (scrollable container)
-            if (!gridWrapperInner) return;
-
-            // Get bounding rectangles
-            const gridRect = gridWrapperInner.getBoundingClientRect();
-
-            // Find the min/max positions of all selected cells
-            let minLeft = Infinity;
-            let minTop = Infinity;
-            let maxRight = -Infinity;
-            let maxBottom = -Infinity;
-
-            cells.forEach(cell => {
-              const cellRect = cell.getBoundingClientRect();
-              const relativeLeft = cellRect.left - gridRect.left + gridWrapperInner.scrollLeft;
-              const relativeTop = cellRect.top - gridRect.top + gridWrapperInner.scrollTop;
-
-              minLeft = Math.min(minLeft, relativeLeft);
-              minTop = Math.min(minTop, relativeTop);
-              maxRight = Math.max(maxRight, relativeLeft + cellRect.width);
-              maxBottom = Math.max(maxBottom, relativeTop + cellRect.height);
-            });
-
-            // Position and size the overlay
-            overlay.style.left = `${minLeft}px`;
-            overlay.style.top = `${minTop}px`;
-            overlay.style.width = `${maxRight - minLeft}px`;
-            overlay.style.height = `${maxBottom - minTop}px`;
-            overlay.style.display = "block";
-
-            // Show fill handle
-            if (fillHandleElement) {
-              fillHandleElement.style.display = "block";
-            }
+            // Handsontable handles visual selection natively - do nothing
           }
 
           window.updateSelectionOverlay = updateSelectionOverlay;
 
           function getSelectionBoundsInfo() {
-            if (!selectedCells || selectedCells.size === 0) {
+            // Use Handsontable's native selection API
+            if (!window.handsontableInstance) {
               return null;
             }
+            
+            const selection = window.handsontableInstance.getSelected();
+            if (!selection || selection.length === 0) {
+              return null;
+            }
+            
+            // Handsontable returns selection as [[startRow, startCol, endRow, endCol], ...]
+            const [startRow, startCol, endRow, endCol] = selection[0];
             const rows = [];
             const cols = [];
-            selectedCells.forEach(cell => {
-              const rowAttr = cell.getAttribute("data-row");
-              const colAttr = cell.getAttribute("data-col");
-              const rowValue = rowAttr !== null ? parseInt(rowAttr, 10) : NaN;
-              const colValue = colAttr !== null ? parseInt(colAttr, 10) : NaN;
-              if (!Number.isNaN(rowValue)) {
-                rows.push(rowValue);
-              }
-              if (!Number.isNaN(colValue)) {
-                cols.push(colValue);
-              }
-            });
-            if (rows.length === 0 || cols.length === 0) {
-              return null;
+            
+            const minRow = Math.min(startRow, endRow);
+            const maxRow = Math.max(startRow, endRow);
+            const minCol = Math.min(startCol, endCol);
+            const maxCol = Math.max(startCol, endCol);
+            
+            for (let r = minRow; r <= maxRow; r++) {
+              rows.push(r);
             }
-            const minRow = Math.min(...rows);
-            const maxRow = Math.max(...rows);
-            const minCol = Math.min(...cols);
-            const maxCol = Math.max(...cols);
+            for (let c = minCol; c <= maxCol; c++) {
+              cols.push(c);
+            }
+            
             return {
               minRow,
               maxRow,
@@ -6011,13 +6017,15 @@ export async function initializeApp() {
             try {
               const changes = action === 'undo' ? window.hf.undo() : window.hf.redo();
               refreshCellsFromChanges(changes);
-              if (selectedCells && selectedCells.size > 0) {
-                updateSelectionOverlay();
-                updateHeaderHighlightsFromSelection();
-                refreshFormulaEditorFromSelection();
-              } else {
-                updateSelectionOverlay();
-                updateCellRangePill();
+              // Check if Handsontable has a selection
+              if (window.handsontableInstance) {
+                const selection = window.handsontableInstance.getSelected();
+                if (selection && selection.length > 0) {
+                  updateHeaderHighlightsFromSelection();
+                  refreshFormulaEditorFromSelection();
+                } else {
+                  updateCellRangePill();
+                }
               }
               if (typeof updateCellChips === 'function') {
                 requestAnimationFrame(() => updateCellChips());
@@ -6029,82 +6037,26 @@ export async function initializeApp() {
 
           // Function to select a range of cells
           function selectRange(startCell, endCell) {
-            clearSelection();
-
-            if (!startCell || !endCell) return;
-            selectionAnchorCell = startCell;
-
-            // If using Handsontable, don't add custom selection classes
-            // Handsontable handles visual selection natively
-            if (window.handsontableInstance) {
-              // Just update internal state for range
-              const startRow = parseInt(startCell.getAttribute("data-row"));
-              const startCol = parseInt(startCell.getAttribute("data-col"));
-              const endRow = parseInt(endCell.getAttribute("data-row"));
-              const endCol = parseInt(endCell.getAttribute("data-col"));
-              
-              // Update Handsontable selection programmatically
-              window.handsontableInstance.selectCell(startRow, startCol, endRow, endCol);
-              
-              // Hide custom overlay
-              const selectionOverlayElement = document.getElementById("selectionOverlay");
-              if (selectionOverlayElement) {
-                selectionOverlayElement.style.display = "none";
-              }
-              updateHeaderHighlightsFromSelection();
-              return;
-            }
-
+            if (!window.handsontableInstance || !startCell || !endCell) return;
+            
             const startRow = parseInt(startCell.getAttribute("data-row"));
             const startCol = parseInt(startCell.getAttribute("data-col"));
             const endRow = parseInt(endCell.getAttribute("data-row"));
             const endCol = parseInt(endCell.getAttribute("data-col"));
-
-            const minRow = Math.min(startRow, endRow);
-            const maxRow = Math.max(startRow, endRow);
-            const minCol = Math.min(startCol, endCol);
-            const maxCol = Math.max(startCol, endCol);
-
-            // Select all cells in the range (skip headers)
-            for (let r = minRow; r <= maxRow; r++) {
-              for (let c = minCol; c <= maxCol; c++) {
-                // Support both old DOM structure and Handsontable structure
-                const cell = gridBody.querySelector(`td[data-row="${r}"][data-col="${c}"]`) ||
-                             gridBody.querySelector(`tr[data-row="${r}"] td[data-col="${c}"]`);
-                if (cell) {
-                  // Skip row headers (first column)
-                  const isRowHeader = cell === cell.parentElement.querySelector("td:first-child");
-                  if (!isRowHeader) {
-                    cell.classList.add("selected");
-                    selectedCells.add(cell);
-
-                    // Mark edge cells for border styling
-                    const edges = [];
-                    if (r === minRow) edges.push("top");
-                    if (r === maxRow) edges.push("bottom");
-                    if (c === minCol) edges.push("left");
-                    if (c === maxCol) edges.push("right");
-
-                    if (edges.length > 0) {
-                      cell.setAttribute("data-selection-edge", edges.join(" "));
-                    } else {
-                      cell.removeAttribute("data-selection-edge");
-                    }
-                  }
-                }
-              }
-            }
-
-            // Update selection overlay
-            updateSelectionOverlay();
+            
+            if (isNaN(startRow) || isNaN(startCol) || isNaN(endRow) || isNaN(endCol)) return;
+            
+            // Use Handsontable's native selection
+            window.handsontableInstance.selectCell(startRow, startCol, endRow, endCol);
             updateHeaderHighlightsFromSelection();
-
+            
             // Update formula editor with first cell's value
-            const firstCell = gridBody.querySelector(`td[data-row="${minRow}"][data-col="${minCol}"]`) ||
-                              gridBody.querySelector(`tr[data-row="${minRow}"] td[data-col="${minCol}"]`);
-            if (firstCell) {
-              const isHeader = firstCell.tagName === "TH" || firstCell === firstCell.parentElement.querySelector("td:first-child");
-              if (!isHeader) {
+            const minRow = Math.min(startRow, endRow);
+            const minCol = Math.min(startCol, endCol);
+            const body = window.handsontableController?.getBodyElement();
+            if (body) {
+              const firstCell = body.querySelector(`td[data-row="${minRow}"][data-col="${minCol}"]`);
+              if (firstCell) {
                 let editorValue = getStoredFormulaText(firstCell) || "";
                 if (!editorValue) {
                   const cellRefForRange = firstCell.getAttribute("data-ref");
@@ -6238,246 +6190,83 @@ export async function initializeApp() {
           }
 
           function moveSelectionBy(deltaRow = 0, deltaCol = 0, extendSelection = false) {
-            const currentCell = window.selectedCell;
-            if (!currentCell) return;
-            const currentRow = parseInt(currentCell.getAttribute("data-row"), 10);
-            const currentCol = parseInt(currentCell.getAttribute("data-col"), 10);
-            if (Number.isNaN(currentRow) || Number.isNaN(currentCol)) return;
-
+            if (!window.handsontableInstance) return;
+            
+            // Get current selection from Handsontable
+            const selection = window.handsontableInstance.getSelected();
+            if (!selection || selection.length === 0) return;
+            
+            const [startRow, startCol, endRow, endCol] = selection[0];
+            const currentRow = extendSelection ? endRow : startRow;
+            const currentCol = extendSelection ? endCol : startCol;
+            
             const maxRow = typeof window.totalGridRows === 'number' ? window.totalGridRows - 1 : currentRow;
             const maxCol = typeof window.totalGridColumns === 'number' ? window.totalGridColumns - 1 : currentCol;
 
             const targetRow = Math.max(0, Math.min(maxRow, currentRow + deltaRow));
             const targetCol = Math.max(0, Math.min(maxCol, currentCol + deltaCol));
 
-            // Support both Handsontable structure and old DOM structure
-            const targetCell = gridBody.querySelector(`td[data-row="${targetRow}"][data-col="${targetCol}"]`) ||
-                               gridBody.querySelector(`tr[data-row="${targetRow}"] td[data-col="${targetCol}"]`);
-            if (!targetCell) return;
-
             if (extendSelection) {
-              const anchor = selectionAnchorCell || currentCell;
-              selectRange(anchor, targetCell);
+              // Extend selection from anchor (start) to target
+              window.handsontableInstance.selectCell(startRow, startCol, targetRow, targetCol);
             } else {
-              enterSelectionModeAndSelectCell(targetCell);
-              selectionAnchorCell = targetCell;
+              // Move to new cell
+              window.handsontableInstance.selectCell(targetRow, targetCol);
+              
+              // Update window.selectedCell for compatibility
+              const targetCell = gridBody.querySelector(`td[data-row="${targetRow}"][data-col="${targetCol}"]`);
+              if (targetCell) {
+                window.selectedCell = targetCell;
+                enterSelectionModeAndSelectCell(targetCell);
+              }
             }
-            targetCell.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+            
+            // Scroll to target
+            window.handsontableInstance.scrollViewportTo(targetRow, targetCol);
           }
 
           // Function to select a single cell programmatically (selection mode)
           function selectCell(cell) {
-            if (!cell) return;
+            if (!cell || !window.handsontableInstance) return;
             
-            // If using Handsontable, use its native selection
-            if (window.handsontableInstance) {
-              const row = parseInt(cell.getAttribute("data-row"));
-              const col = parseInt(cell.getAttribute("data-col"));
-              if (!isNaN(row) && !isNaN(col)) {
-                // Use Handsontable's native selection
-                window.handsontableInstance.selectCell(row, col);
-              }
-              
-              // Update internal state
-              clearSelection();
-              selectedCells.add(cell);
-              window.selectedCell = cell;
-              selectionAnchorCell = cell;
-              
-              // Hide custom overlay - Handsontable has its own
-              const selectionOverlayElement = document.getElementById("selectionOverlay");
-              if (selectionOverlayElement) {
-                selectionOverlayElement.style.display = "none";
-              }
-              updateHeaderHighlightsFromSelection();
-              return;
-            }
+            const row = parseInt(cell.getAttribute("data-row"));
+            const col = parseInt(cell.getAttribute("data-col"));
+            if (isNaN(row) || isNaN(col)) return;
             
-            // Old DOM-based selection (fallback)
-            clearSelection();
-            selectedCells.add(cell);
-            cell.classList.add("selected");
-            // Only add edit-mode class if actually in edit mode
-            if (isEditMode) {
-              cell.classList.add("edit-mode");
-            }
-            // Single cell selection - all edges should have borders
-            cell.setAttribute("data-selection-edge", "top bottom left right");
+            // Use Handsontable's native selection
+            window.handsontableInstance.selectCell(row, col);
             window.selectedCell = cell;
-            selectionAnchorCell = cell;
-
-            // Update selection overlay
-            updateSelectionOverlay();
             updateHeaderHighlightsFromSelection();
-
-            // Log cell information
-            const cellRef = cell.getAttribute("data-ref");
-            const sheetName = "Sheet1";
-            const sheetId = window.hfSheetId !== undefined ? window.hfSheetId : 0;
-            console.log(`Cell clicked - Sheet: ${sheetName}, Cell: ${cellRef || 'N/A'}, Sheet ID: ${sheetId}`);
-
-            // Only update formula editor for data cells (not headers)
-            const isHeader = cell.tagName === "TH" || cell === cell.parentElement.querySelector("td:first-child");
-            if (!isHeader) {
-              let editorValue = getStoredFormulaText(cell) || "";
-              if (!editorValue) {
-                const cellRef = cell.getAttribute("data-ref");
-                if (cellRef && window.hf) {
-                  const address = cellRefToAddress(cellRef);
-                  if (address) {
-                    const [row, col] = address;
-                    const sheetId = typeof window.hfSheetId === "number" ? window.hfSheetId : 0;
-                    let hasFormula = false;
-                    try {
-                      const cellFormula = window.hf.getCellFormula({ col, row, sheet: sheetId });
-                      if (cellFormula) {
-                        hasFormula = true;
-                        editorValue = cellFormula.startsWith("=") ? cellFormula.substring(1) : cellFormula;
-                        const formulaToStore = cellFormula.startsWith("=") ? cellFormula : `=${cellFormula}`;
-                        cell.setAttribute("data-formula", formulaToStore);
-                        if (cellRef && !readRawFormula(cellRef, sheetId)) {
-                          saveRawFormula(cellRef, formulaToStore, sheetId);
-                        }
-                      }
-                    } catch (formulaError) {
-                      hasFormula = false;
-                    }
-
-                    if (!hasFormula) {
-                      try {
-                        const cellValue = window.hf.getCellValue({ col, row, sheet: sheetId });
-                        if (cellValue !== null && cellValue !== undefined && cellValue !== "") {
-                          editorValue = cellValue.toString();
-                          cell.setAttribute("data-formula", editorValue);
-                          if (cellRef && !readRawFormula(cellRef, sheetId)) {
-                            saveRawFormula(cellRef, editorValue, sheetId);
-                          }
-                        } else {
-                          editorValue = "";
-                          cell.removeAttribute("data-formula");
-                        }
-                      } catch (valueError) {
-                        editorValue = "";
-                        cell.removeAttribute("data-formula");
-                      }
-                    }
-                  }
-                }
-              }
-
-              const currentEditor = window.monacoEditor || editor;
-              if (currentEditor && typeof currentEditor.setValue === 'function') {
-                // Formula starts on line 1
-                const fullValue = ensureSevenLines(editorValue || "");
-
-                // Calculate target cursor position
-                const line1Content = (editorValue || "").split('\n')[0] || "";
-                const targetColumn = Math.max(1, line1Content.length + 1);
-                const targetLine = 1;
-
-                // Set programmatic flag BEFORE setValue to prevent event listener from interfering
-                window.isProgrammaticCursorChange = true;
-
-                // Remove edit-mode class from editor-wrapper to show 30% opacity when just selecting
-                // This applies to cells with any content (formula or value)
-                const editorWrapper = document.querySelector('.editor-wrapper');
-                if (editorWrapper && currentMode !== MODES.EDIT) {
-                  editorWrapper.classList.remove('editor-edit-mode');
-                }
-
-                // Set the value directly using setValue
-                // This is more reliable than executeEdits
-                // Use requestAnimationFrame to ensure the editor is ready
-                requestAnimationFrame(() => {
-                  currentEditor.setValue(fullValue);
-
-                  // Set cursor position after setting value
-                  if (window.monaco && window.monaco.Range) {
-                    currentEditor.setPosition({ lineNumber: targetLine, column: targetColumn });
-                  } else {
-                    // Fallback if monaco isn't loaded yet
-                    setTimeout(() => {
-                      currentEditor.setPosition({ lineNumber: targetLine, column: targetColumn });
-                    }, 0);
-                  }
-
-                  // Reset flag after operations complete
-                  Promise.resolve().then(() => {
-                    window.isProgrammaticCursorChange = false;
-                    if (typeof updateCellChips === 'function') {
-                      requestAnimationFrame(() => updateCellChips());
-                    }
-                  });
-
-                  currentEditor.updateOptions({ 
-                    cursorBlinking: isEditMode ? 'blink' : 'hidden',
-                    cursorStyle: 'line'
-                  });
-
-                  if (currentMode !== MODES.READY && typeof currentEditor.focus === 'function') {
-                    currentEditor.focus();
-                  } else if (currentMode === MODES.READY) {
-                    blurMonacoEditor(currentEditor);
-                    currentEditor.render(true);
-                  }
-                });
-              }
-            } else {
-              const currentEditor = window.monacoEditor || editor;
-              if (currentEditor) {
-                currentEditor.updateOptions({ 
-                  cursorBlinking: 'hidden'
-                });
-                // Blur and force re-render to ensure cursor is hidden
-                blurMonacoEditor(currentEditor);
-                currentEditor.render(true);
-              }
-            }
-            updateCellRangePill();
-            if (typeof syncResultPaneWithSelection === 'function') {
-              syncResultPaneWithSelection();
-            }
-            if (typeof updateCellChips === 'function') {
-              requestAnimationFrame(() => updateCellChips());
-            }
           }
 
           // Disable editor initially (no cell selected) - will be set when Monaco loads
           // Ctrl+Enter command is set up in the Monaco initialization above
 
-          // Handle mouseup to end selection
+          // Handle mouseup - Handsontable handles selection natively
           document.addEventListener("mouseup", () => {
-            if (isSelecting) {
-              // Only reset edit-mode-specific variables if we're in edit mode
-              const isInEditMode = currentMode === MODES.EDIT || currentMode === MODES.ENTER;
-              
-              if (isInEditMode) {
-                // Update range tracking with the complete range on mouseup (after drag completes)
-                // During drag, updateEndCellReference tracks the current end cell (A1:A2, A1:A3, etc.)
-                // On mouseup, we update to the final complete range from selectedCells
-                if (rangeStartCellRefPosition && selectedCells && selectedCells.size > 1) {
+            // Only handle edit-mode-specific range tracking
+            const isInEditMode = currentMode === MODES.EDIT || currentMode === MODES.ENTER;
+            
+            if (isInEditMode) {
+              // Update range tracking with the complete range on mouseup (after drag completes)
+              // Get range from Handsontable selection
+              if (rangeStartCellRefPosition && window.handsontableInstance) {
+                const selection = window.handsontableInstance.getSelected();
+                if (selection && selection.length > 0) {
+                  const [startRow, startCol, endRow, endCol] = selection[0];
+                  const minRow = Math.min(startRow, endRow);
+                  const maxRow = Math.max(startRow, endRow);
+                  const minCol = Math.min(startCol, endCol);
+                  const maxCol = Math.max(startCol, endCol);
+                  
                   // Use requestAnimationFrame to ensure editor updates from drag have completed
                   requestAnimationFrame(() => {
                     const currentEditor = window.monacoEditor || editor;
                     if (currentEditor) {
                       const model = currentEditor.getModel();
                       if (model) {
-                        // Get the complete range from selected cells
-                        let minRow = Infinity, maxRow = -Infinity;
-                        let minCol = Infinity, maxCol = -Infinity;
-                        
-                        selectedCells.forEach(cell => {
-                          const row = parseInt(cell.getAttribute("data-row"));
-                          const col = parseInt(cell.getAttribute("data-col"));
-                          if (!isNaN(row) && !isNaN(col)) {
-                            minRow = Math.min(minRow, row);
-                            maxRow = Math.max(maxRow, row);
-                            minCol = Math.min(minCol, col);
-                            maxCol = Math.max(maxCol, col);
-                          }
-                        });
-                        
-                        if (minRow !== Infinity && maxRow !== -Infinity && minCol !== Infinity && maxCol !== -Infinity) {
+                        // minRow, maxRow, minCol, maxCol already calculated from Handsontable selection above
+                        if (minRow !== undefined && maxRow !== undefined && minCol !== undefined && maxCol !== undefined) {
                           // Find the actual range reference in the editor
                           const fullText = model.getValue();
                           const detectedRefs = detectCellReferences(fullText);
@@ -6526,21 +6315,8 @@ export async function initializeApp() {
                 // They need to persist so we can find and replace the range on next mousedown
                 // They'll be reset when we actually replace the reference or exit edit mode
               }
-              
-              // Reset selection state after processing
-              isSelecting = false;
-              selectionStart = null;
-              isDragStart = false;
-              
-              if (!isInEditMode) {
-                // In ready mode, ensure selection overlay is updated after mouseup
-                if (selectedCells && selectedCells.size > 0) {
-                  requestAnimationFrame(() => {
-                    updateSelectionOverlay();
-                  });
-                }
-              }
             }
+            // Handsontable handles selection natively - no custom state to reset
           });
 
           // Handle keydown events
@@ -6698,10 +6474,14 @@ export async function initializeApp() {
               }
 
               // If still no start cell, use anchor cell
-              if (!startCellRef && selectionAnchorCell) {
-                startCellRef = selectionAnchorCell.getAttribute("data-ref");
-                if (startCellRef) {
-                  const address = cellRefToAddress(startCellRef);
+              // Get start cell from Handsontable selection
+              if (!startCellRef && window.handsontableInstance) {
+                const selection = window.handsontableInstance.getSelected();
+                if (selection && selection.length > 0) {
+                  const [startRow, startCol] = selection[0];
+                  startCellRef = addressToCellRef(startRow, startCol);
+                  if (startCellRef) {
+                    const address = cellRefToAddress(startCellRef);
                   if (address) {
                     [startRow, startCol] = address;
                   }
@@ -6709,14 +6489,20 @@ export async function initializeApp() {
               }
             }
 
-            // If we still don't have a starting cell, use anchor cell
+            // If we still don't have a starting cell, get from Handsontable selection
             if (!startRow || !startCol) {
-              if (selectionAnchorCell) {
-                startCellRef = selectionAnchorCell.getAttribute("data-ref");
-                if (startCellRef) {
-                  const address = cellRefToAddress(startCellRef);
-                  if (address) {
-                    [startRow, startCol] = address;
+              if (window.handsontableInstance) {
+                const selection = window.handsontableInstance.getSelected();
+                if (selection && selection.length > 0) {
+                  const [selStartRow, selStartCol] = selection[0];
+                  startCellRef = addressToCellRef(selStartRow, selStartCol);
+                  if (startCellRef) {
+                    const address = cellRefToAddress(startCellRef);
+                    if (address) {
+                      const [addrRow, addrCol] = address;
+                      if (!startRow) startRow = addrRow;
+                      if (!startCol) startCol = addrCol;
+                    }
                   }
                 }
               } else if (window.selectedCell) {
@@ -7134,57 +6920,63 @@ export async function initializeApp() {
             let editRange = null;
             let insertText = cellRef;
 
-            if (isRangeEnd && lastSelectedCellRefPosition && isSelecting) {
-              // Only place colon when dragging to create a range (isSelecting must be true)
-              // For range end, find the actual cell reference and place colon at its END
-              const { lineNumber, columnNumber } = lastSelectedCellRefPosition;
-              const lineIndex = lineNumber - 1;
-              const line = lines[lineIndex] || '';
-              
-              // Find the actual reference that matches this position to get its END
-              const matchingRef = detectedRefs.find(r => {
-                const refLine = model.getPositionAt(r.start).lineNumber;
-                const refCol = model.getPositionAt(r.start).column;
-                return refLine === lineNumber && refCol === columnNumber;
-              });
-              
-              if (matchingRef) {
-                // Get the END position of the cell reference
-                const endPos = model.getPositionAt(matchingRef.end);
-                const refEndColumn = endPos.column + 1; // Add 1 to place colon AFTER the last character
+            // Check if we're dragging a range (Handsontable handles this natively)
+            if (isRangeEnd && lastSelectedCellRefPosition && window.handsontableInstance) {
+              const selection = window.handsontableInstance.getSelected();
+              const isDraggingRange = selection && selection.length > 0 && 
+                (selection[0][0] !== selection[0][2] || selection[0][1] !== selection[0][3]);
+              // Only place colon when dragging to create a range
+              if (isDraggingRange) {
+                // For range end, find the actual cell reference and place colon at its END
+                const { lineNumber, columnNumber } = lastSelectedCellRefPosition;
+                const lineIndex = lineNumber - 1;
+                const line = lines[lineIndex] || '';
                 
-                // Check if there's already a colon immediately after the reference
-                const charAfterRef = line.charAt(refEndColumn - 2); // -2 because line is 0-indexed, columns are 1-indexed, and we added +1
-                const hasColon = charAfterRef === ':';
+                // Find the actual reference that matches this position to get its END
+                const matchingRef = detectedRefs.find(r => {
+                  const refLine = model.getPositionAt(r.start).lineNumber;
+                  const refCol = model.getPositionAt(r.start).column;
+                  return refLine === lineNumber && refCol === columnNumber;
+                });
                 
-                if (hasColon) {
-                  // Find the range end reference and replace it
-                  const colonIndex = refEndColumn - 2; // -2 to convert to 0-indexed line position
-                  const afterColon = line.substring(colonIndex + 1);
-                  const rangeEndMatch = afterColon.match(/^([A-Z]+\d+)/);
-                  if (rangeEndMatch) {
-                    const rangeEndStart = colonIndex + 1;
-                    const rangeEndEnd = rangeEndStart + rangeEndMatch[1].length;
-                    const startPos = model.getPositionAt(lineStarts[lineIndex] + rangeEndStart);
-                    const endPos2 = model.getPositionAt(lineStarts[lineIndex] + rangeEndEnd);
-                    editRange = new monaco.Range(startPos.lineNumber, startPos.column, endPos2.lineNumber, endPos2.column);
-                    insertText = cellRef;
+                if (matchingRef) {
+                  // Get the END position of the cell reference
+                  const endPos = model.getPositionAt(matchingRef.end);
+                  const refEndColumn = endPos.column + 1; // Add 1 to place colon AFTER the last character
+                  
+                  // Check if there's already a colon immediately after the reference
+                  const charAfterRef = line.charAt(refEndColumn - 2); // -2 because line is 0-indexed, columns are 1-indexed, and we added +1
+                  const hasColon = charAfterRef === ':';
+                  
+                  if (hasColon) {
+                    // Find the range end reference and replace it
+                    const colonIndex = refEndColumn - 2; // -2 to convert to 0-indexed line position
+                    const afterColon = line.substring(colonIndex + 1);
+                    const rangeEndMatch = afterColon.match(/^([A-Z]+\d+)/);
+                    if (rangeEndMatch) {
+                      const rangeEndStart = colonIndex + 1;
+                      const rangeEndEnd = rangeEndStart + rangeEndMatch[1].length;
+                      const startPos = model.getPositionAt(lineStarts[lineIndex] + rangeEndStart);
+                      const endPos2 = model.getPositionAt(lineStarts[lineIndex] + rangeEndEnd);
+                      editRange = new monaco.Range(startPos.lineNumber, startPos.column, endPos2.lineNumber, endPos2.column);
+                      insertText = cellRef;
+                    } else {
+                      // No range end yet, insert after colon
+                      editRange = new monaco.Range(lineNumber, refEndColumn, lineNumber, refEndColumn);
+                      insertText = cellRef;
+                    }
                   } else {
-                    // No range end yet, insert after colon
+                    // No colon yet, insert ":" immediately AFTER the last character of the cell reference
                     editRange = new monaco.Range(lineNumber, refEndColumn, lineNumber, refEndColumn);
-                    insertText = cellRef;
+                    insertText = ':' + cellRef;
                   }
                 } else {
-                  // No colon yet, insert ":" immediately AFTER the last character of the cell reference
-                  editRange = new monaco.Range(lineNumber, refEndColumn, lineNumber, refEndColumn);
+                  // Fallback: use stored position
+                  const { endColumn } = lastSelectedCellRefPosition;
+                  const insertColumn = endColumn || columnNumber;
+                  editRange = new monaco.Range(lineNumber, insertColumn, lineNumber, insertColumn);
                   insertText = ':' + cellRef;
                 }
-              } else {
-                // Fallback: use stored position
-                const { endColumn } = lastSelectedCellRefPosition;
-                const insertColumn = endColumn || columnNumber;
-                editRange = new monaco.Range(lineNumber, insertColumn, lineNumber, insertColumn);
-                insertText = ':' + cellRef;
               }
             } else if (lastSelectedCellRefPosition) {
               // Replace the last selected cell reference in its entirety
@@ -7431,9 +7223,13 @@ export async function initializeApp() {
 
             if (currentMode === MODES.READY) {
               if ((e.key === "Delete" || e.key === "Backspace") && !isExternalTextInputFocused) {
-                if (selectedCells && selectedCells.size > 0) {
-                  e.preventDefault();
-                  clearSelectedCellContents();
+                // Check if Handsontable has a selection
+                if (window.handsontableInstance) {
+                  const selection = window.handsontableInstance.getSelected();
+                  if (selection && selection.length > 0) {
+                    e.preventDefault();
+                    clearSelectedCellContents();
+                  }
                 }
                 return;
               }
@@ -7539,241 +7335,19 @@ export async function initializeApp() {
 
           function finalizeFormulaSelectionIfNeeded() {}
 
-          function attachGridCellListeners(cell) {
-            if (!cell || cell.dataset.listenersAttached === 'true') {
-              return;
-            }
-            cell.dataset.listenersAttached = 'true';
-            // Keep mousedown/mouseenter/mouseup for drag selection if needed
-            // But disable click handler - Handsontable handles selection natively
-            cell.addEventListener('mousedown', handleGridCellMouseDown);
-            cell.addEventListener('mouseenter', handleGridCellMouseEnter);
-            cell.addEventListener('mouseup', handleGridCellMouseUp);
-            // Don't attach click - let Handsontable handle it
-            // cell.addEventListener('click', handleGridCellClick);
-            // Keep dblclick for edit mode
-            cell.addEventListener('dblclick', handleGridCellDoubleClick);
-          }
+          // handleGridCellMouseDown and handleGridCellDoubleClick are now defined earlier (before buildGrid)
+          // Old mouse handlers removed - Handsontable handles all selection natively
+          // handleGridCellMouseEnter, handleGridCellMouseUp, handleGridCellClick are no longer needed
 
-          function handleGridCellMouseDown(event) {
-            if (event.button !== 0) return;
-            const cell = event.currentTarget;
-            if (!cell) return;
-            if (event.detail === 2) return;
-
-            if (currentMode === MODES.EDIT || currentMode === MODES.ENTER) {
-              arrowKeysInGridMode = true;
-              const editingCell = window.selectedCell;
-              const hasChanged = hasFormulaChanged();
-
-              if (!hasChanged) {
-                cancelEditingSession();
-                if (cell !== editingCell) {
-                  selectCell(cell);
-                }
-                event.preventDefault();
-                return;
-              }
-
-              isSelectingCellForFormula = true;
-            }
-
-            isSelecting = true;
-            selectionStart = cell;
-            selectCell(cell);
-            event.preventDefault();
-          }
-
-          function handleGridCellMouseEnter(event) {
-            if (!isSelecting || !selectionStart) return;
-            if (currentMode !== MODES.READY || isSelectingCellForFormula) return;
-            const cell = event.currentTarget;
-            if (!cell) return;
-            selectRange(selectionStart, cell);
-          }
-
-          function handleGridCellMouseUp() {
-            if (!isSelecting) return;
-            isSelecting = false;
-            selectionStart = null;
-            updateSelectionOverlay();
-          }
-
-          function handleGridCellClick(event) {
-            if (currentMode !== MODES.READY) {
-              event.preventDefault();
-              event.stopPropagation();
-              return;
-            }
-            if (isSelecting) {
-              return;
-            }
-            const cell = event.currentTarget;
-            if (!cell) return;
-            enterSelectionModeAndSelectCell(cell);
-          }
-
-          function handleGridCellDoubleClick(event) {
-            event.preventDefault();
-            event.stopPropagation();
-            const cell = event.currentTarget;
-            if (!cell) return;
-            enterEditMode(cell);
-          }
-
-          function buildGrid(rows = 150, columns = 50) {
-            console.log("buildGrid function called with rows:", rows, "columns:", columns);
-            window.totalGridRows = rows;
-            window.totalGridColumns = columns;
-            
-            if (!handsontableRoot) {
-              console.error("handsontableRoot not found!");
-              return;
-            }
-
-            // Create Handsontable instance
-            handsontableController = createHandsontableGrid({
-              container: handsontableRoot,
-              rows,
-              columns,
-              onCellRender: (cellElement, row, column) => {
-                // Attach event listeners to each cell as it's rendered
-                attachGridCellListeners(cellElement);
-              },
-              onSelection: (startRow, startCol, endRow, endCol) => {
-                // Handle Handsontable selection event
-                // Let Handsontable handle visual selection natively - don't call old selectCell/selectRange
-                // We just need to update our UI (formula editor, etc.)
-                if (currentMode !== MODES.READY) return;
-                
-                const body = handsontableController.getBodyElement();
-                if (!body) return;
-                
-                // Hide custom selection overlay - Handsontable has its own
-                const selectionOverlayElement = document.getElementById("selectionOverlay");
-                if (selectionOverlayElement) {
-                  selectionOverlayElement.style.display = "none";
-                }
-                
-                // Get the primary selected cell (start cell)
-                const cell = body.querySelector(`td[data-row="${startRow}"][data-col="${startCol}"]`);
-                if (!cell) return;
-                
-                // Update window.selectedCell for compatibility with existing code
-                window.selectedCell = cell;
-                
-                // Update formula editor with selected cell's value
-                const cellRef = cell.getAttribute("data-ref");
-                if (cellRef) {
-                  // Get cell value/formula and update editor
-                  const address = cellRefToAddress(cellRef);
-                  if (address) {
-                    const [row, col] = address;
-                    const sheetId = 0;
-                    
-                    let editorValue = "";
-                    try {
-                      const cellFormula = window.hf.getCellFormula({ col, row, sheet: sheetId });
-                      if (cellFormula) {
-                        editorValue = cellFormula.startsWith("=") ? cellFormula.substring(1) : cellFormula;
-                      } else {
-                        const cellValue = window.hf.getCellValue({ col, row, sheet: sheetId });
-                        if (cellValue !== null && cellValue !== undefined && cellValue !== "") {
-                          editorValue = cellValue.toString();
-                        }
-                      }
-                    } catch (e) {
-                      // Cell might be empty
-                    }
-                    
-                    // Update Monaco editor
-                    const currentEditor = window.monacoEditor;
-                    if (currentEditor && typeof currentEditor.setValue === 'function') {
-                      const fullValue = ensureSevenLines(editorValue || "");
-                      requestAnimationFrame(() => {
-                        currentEditor.setValue(fullValue);
-                        const line1Content = (editorValue || "").split('\n')[0] || "";
-                        const targetColumn = Math.max(1, line1Content.length + 1);
-                        currentEditor.setPosition({ lineNumber: 1, column: targetColumn });
-                      });
-                    }
-                    
-                    // Update cell range pill
-                    updateCellRangePill();
-                  }
-                }
-              },
-              onDoubleClick: (event, coords, TD) => {
-                // Handle Handsontable double-click event
-                if (TD && coords) {
-                  const body = handsontableController.getBodyElement();
-                  if (!body) return;
-                  const row = coords[0];
-                  const col = coords[1];
-                  const cell = body.querySelector(`td[data-row="${row}"][data-col="${col}"]`);
-                  if (cell) {
-                    enterEditMode(cell);
-                  }
-                }
-              },
-              onBeforeKeyDown: (event) => {
-                // Handle keyboard navigation and editing
-                // Let existing keyboard handlers take precedence
-                // Return false to prevent Handsontable's default behavior if needed
-                // For now, let it pass through to existing handlers
-                return true;
-              }
-            });
-
-            // Update references to use Handsontable's DOM
-            gridBody = handsontableController.getBodyElement();
-            gridHeaderElement = handsontableController.getHeaderElement();
-            rowHeaderElement = handsontableController.getRowHeaderElement();
-
-            // Store Handsontable instance globally for access elsewhere
-            window.handsontableInstance = handsontableController.hot;
-
-            // Initialize HyperFormula adapter for syncing data
-            if (window.hf && handsontableController) {
-              window.hyperFormulaAdapter = createHyperFormulaAdapter({
-                hfInstance: window.hf,
-                handsontableController: handsontableController,
-                sheetId: 0
-              });
-              console.log("HyperFormula adapter initialized");
-            }
-
-            // Update height after a brief delay to ensure container is laid out
-            requestAnimationFrame(() => {
-              if (handsontableController.updateHeight) {
-                handsontableController.updateHeight();
-              }
-            });
-
-            console.log("Handsontable grid created successfully");
-          }
+          // buildGrid function is now defined earlier (before Monaco setup) so it's available when called
 
           // Old DOM grid building code removed - now using Handsontable
           // The cell creation loop and event handlers are now handled by Handsontable's renderer
           // via the onCellRender callback in createHandsontableGrid
 
-        initResizablePanes();
-
-        initClappyChat({
-          transcript: clappyTranscript,
-          form: clappyForm,
-          input: clappyInput,
-          chatToggle: chatCollapseToggle,
-          consoleEl: clappyConsole,
-          chatContainer: mainChatContainer,
-          middleSection,
-          gridContainer
-        });
-
-          // Build grid immediately - don't wait for Monaco
-          console.log("About to call buildGrid()");
-          buildGrid();
-          console.log("buildGrid() called");
+          // Note: initResizablePanes(), initClappyChat(), and buildGrid() are now called
+          // from within the Monaco Editor setup callback (after Monaco is ready)
+          // to ensure proper initialization order
 
           // Start the grid with the sample fake data set (row-major from A1)
           populateGridWithData(SAMPLE_FAKE_DATA, "A1");
@@ -7908,8 +7482,8 @@ export async function initializeApp() {
           if (typeof window.updateResultHeaderValue === "function") {
             window.updateResultHeaderValue();
           }
-
-        } catch (error) {
+        }
+      } catch (error) {
           console.error("Error initializing app:", error);
         }
-      }
+}
