@@ -58,6 +58,12 @@ export class HarborFormulasPanel {
           case 'alert':
             vscode.window.showErrorMessage(message.text);
             return;
+          case 'error':
+            vscode.window.showErrorMessage(`Harbor Formulas: ${message.text}`);
+            return;
+          case 'initialized':
+            console.log('Harbor Formulas webview initialized');
+            return;
         }
       },
       null,
