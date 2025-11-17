@@ -615,6 +615,14 @@ export async function initializeApp() {
           let rangeStartCellRefPosition = null; // Track the start cell of a range for range updates
           let rangeEndCellRefPosition = null; // Track the end cell reference position for updates
           let isDragStart = false; // Track if mousedown is starting a drag
+          
+          // Reset cell reference tracking when user sets the reference (by typing or clicking in editor)
+          function resetCellReferenceTracking() {
+            rangeStartCellRefPosition = null;
+            rangeEndCellRefPosition = null;
+            lastSelectedCellRefPosition = null;
+            isSelectingCellForFormula = false;
+          }
           const EDITOR_STATUS_PLACEHOLDER = "--";
 
           function formatEditorStatusValue(value) {
@@ -1637,8 +1645,14 @@ export async function initializeApp() {
                     window.suggestWidgetConstraintInterval = constraintInterval;
 
                     // Also listen for Monaco's suggest events
-                    editor.onDidChangeCursorPosition(() => {
+                    editor.onDidChangeCursorPosition((e) => {
                       setTimeout(constrainSuggestWidget, 10);
+                      
+                      // Reset cell reference tracking when user clicks in the editor (sets the reference)
+                      // Skip if this is a programmatic cursor change
+                      if (!window.isProgrammaticCursorChange && (currentMode === MODES.EDIT || currentMode === MODES.ENTER)) {
+                        resetCellReferenceTracking();
+                      }
                     });
 
                     // Watch for when suggestions are shown/hidden
@@ -3906,6 +3920,13 @@ export async function initializeApp() {
                     editor.onDidChangeModelContent((e) => {
                       // Skip if this is a programmatic change
                       if (window.isProgrammaticCursorChange) return;
+                      
+                      // Reset cell reference tracking when user starts typing (sets the reference)
+                      // This happens before processing other content changes
+                      if (currentMode === MODES.EDIT || currentMode === MODES.ENTER) {
+                        resetCellReferenceTracking();
+                      }
+                      
                       if (currentMode === MODES.EDIT && editModePointerArmed && e && Array.isArray(e.changes)) {
                         const insertedDelimiter = e.changes.some(change => change?.text && POINTER_NAV_SEPARATOR_REGEX.test(change.text));
                         if (insertedDelimiter) {
