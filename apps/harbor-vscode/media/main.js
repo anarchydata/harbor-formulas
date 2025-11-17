@@ -1,7 +1,13 @@
 /**
  * Harbor Formulas Webview Main Script
  * Initializes HyperFormula and Handsontable in the VS Code webview
+ * 
+ * This file is bundled with esbuild to include npm dependencies
  */
+
+import { HyperFormula } from 'hyperformula';
+import Handsontable from 'handsontable';
+import 'handsontable/dist/handsontable.full.css';
 
 (async function initializeHarborFormulas() {
   try {
@@ -20,16 +26,7 @@
       </div>
     `;
 
-    // Load HyperFormula and Handsontable from CDN
-    // In production, these should be bundled
-    await Promise.all([
-      loadScript('https://cdn.jsdelivr.net/npm/hyperformula@3.1.0/dist/hyperformula.full.min.js'),
-      loadScript('https://cdn.jsdelivr.net/npm/handsontable@16.1.1/dist/handsontable.full.min.js'),
-      loadStylesheet('https://cdn.jsdelivr.net/npm/handsontable@16.1.1/dist/handsontable.full.min.css')
-    ]);
-
     // Initialize HyperFormula
-    const { HyperFormula } = window.HyperFormula;
     const hf = HyperFormula.buildEmpty({
       licenseKey: 'gpl-v3',
       undoLimit: 500,
@@ -113,26 +110,4 @@
     }
   }
 })();
-
-// Helper functions
-function loadScript(url) {
-  return new Promise((resolve, reject) => {
-    const script = document.createElement('script');
-    script.src = url;
-    script.onload = resolve;
-    script.onerror = () => reject(new Error(`Failed to load script: ${url}`));
-    document.head.appendChild(script);
-  });
-}
-
-function loadStylesheet(url) {
-  return new Promise((resolve, reject) => {
-    const link = document.createElement('link');
-    link.rel = 'stylesheet';
-    link.href = url;
-    link.onload = resolve;
-    link.onerror = () => reject(new Error(`Failed to load stylesheet: ${url}`));
-    document.head.appendChild(link);
-  });
-}
 
