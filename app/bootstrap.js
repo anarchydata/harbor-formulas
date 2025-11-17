@@ -7483,10 +7483,11 @@ export async function initializeApp() {
                           console.log('Editor text at column 2:', fullText.split('\n')[lineNumber - 1]?.charAt(columnNumber - 1));
                           
                           // Find references that start at the correct position
+                          // Be flexible with column matching (within 2 columns) to account for prefix differences
                           const candidates = detectedRefs.filter(r => {
                             const refStartPos = model.getPositionAt(r.start);
                             const matches = refStartPos.lineNumber === lineNumber && 
-                                           refStartPos.column === columnNumber;
+                                           Math.abs(refStartPos.column - columnNumber) <= 2;
                             console.log(`Filtering ref "${r.text}" (offset ${r.start}): startPos={line:${refStartPos.lineNumber}, col:${refStartPos.column}}, looking for {line:${lineNumber}, col:${columnNumber}}, matches: ${matches}`);
                             return matches;
                           });
@@ -7513,11 +7514,16 @@ export async function initializeApp() {
                           });
                           } else {
                             // For single cells, match by end position
+                            // Be flexible with end column matching (within 2 columns) to account for prefix differences
                             const targetEndColumn = refPosition.endColumn;
+                            console.log('Matching single cell - targetEndColumn:', targetEndColumn, 'candidates:', candidates.length);
                             matchingRef = candidates.find(r => {
                               const refEndPos = model.getPositionAt(r.end);
-                              return refEndPos.lineNumber === lineNumber &&
-                                     refEndPos.column === targetEndColumn;
+                              const matches = refEndPos.lineNumber === lineNumber &&
+                                             Math.abs(refEndPos.column - targetEndColumn) <= 2 &&
+                                             !r.text.includes(':'); // Single cells don't have colons
+                              console.log('Checking single cell candidate:', r.text, 'endPos:', { lineNumber: refEndPos.lineNumber, column: refEndPos.column }, 'targetEndColumn:', targetEndColumn, 'matches:', matches);
+                              return matches;
                             });
                           }
                           
@@ -7584,11 +7590,14 @@ export async function initializeApp() {
                               // Use the actual detected position, not the insertion position
                               const actualStartPos = model.getPositionAt(matchingRef.start);
                               const actualEndPos = model.getPositionAt(matchingRef.end);
-                              rangeStartCellRefPosition = {
+                              const actualPosition = {
                                 lineNumber: actualStartPos.lineNumber,
                                 columnNumber: actualStartPos.column,
                                 endColumn: actualEndPos.column
                               };
+                              // Update both rangeStartCellRefPosition (for ranges) and lastSelectedCellRefPosition (for single cells)
+                              rangeStartCellRefPosition = actualPosition;
+                              lastSelectedCellRefPosition = actualPosition;
                             } else {
                               // Fallback to stored position if detection fails
                               rangeStartCellRefPosition = lastSelectedCellRefPosition;
