@@ -3432,8 +3432,8 @@ export async function initializeApp() {
                               <div class="dependency-reference">${safeReferenceLabel}</div>
                               <div class="dependency-first-cell">
                                 <span class="dependency-left-group">
-                                  <span class="dependency-first-address">${cellMarkup}</span>
-                                  <span class="dependency-value ${valueClass}">${valueMarkup}</span>
+                                <span class="dependency-first-address">${cellMarkup}</span>
+                                <span class="dependency-value ${valueClass}">${valueMarkup}</span>
                                 </span>
                                 ${positionInfo}
                               </div>
@@ -6406,96 +6406,91 @@ export async function initializeApp() {
           // Handle mouseup to end selection
           document.addEventListener("mouseup", () => {
             if (isSelecting) {
-              // Only handle edit mode replacement if we're actually in edit mode
+              // Only reset edit-mode-specific variables if we're in edit mode
               const isInEditMode = currentMode === MODES.EDIT || currentMode === MODES.ENTER;
               
-              // Check if it was just a click (not a drag) AND we're in edit mode
-              if (isInEditMode && isSelectingCellForFormula && !isDragStart && lastSelectedCellRefPosition) {
-                // It was just a click - replace the last inserted reference
-                const currentEditor = window.monacoEditor || editor;
-                if (currentEditor) {
-                  const model = currentEditor.getModel();
-                  if (model) {
-                    const { lineNumber, columnNumber } = lastSelectedCellRefPosition;
-                    const clickedCell = selectionStart;
-                    const editingCell = window.selectedCell;
-                    
-                    if (clickedCell) {
-                      const clickedRow = parseInt(clickedCell.getAttribute("data-row"));
-                      const clickedCol = parseInt(clickedCell.getAttribute("data-col"));
-                      const cellRefText = addressToCellRef(clickedRow, clickedCol);
-                      
-                      // Find the actual reference at this position to get the exact range
-                      const fullText = model.getValue();
-                      const detectedRefs = detectCellReferences(fullText);
-                      const matchingRef = detectedRefs.find(r => {
-                        const refLine = model.getPositionAt(r.start).lineNumber;
-                        const refCol = model.getPositionAt(r.start).column;
-                        return refLine === lineNumber && refCol === columnNumber;
-                      });
-                      
-                      if (matchingRef) {
-                        const startPos = model.getPositionAt(matchingRef.start);
-                        const endPos = model.getPositionAt(matchingRef.end);
-                        const replaceRange = new monaco.Range(startPos.lineNumber, startPos.column, endPos.lineNumber, endPos.column);
+              if (isInEditMode) {
+                // Update range tracking with the complete range on mouseup (after drag completes)
+                // During drag, updateEndCellReference tracks the current end cell (A1:A2, A1:A3, etc.)
+                // On mouseup, we update to the final complete range from selectedCells
+                if (rangeStartCellRefPosition && selectedCells && selectedCells.size > 1) {
+                  // Use requestAnimationFrame to ensure editor updates from drag have completed
+                  requestAnimationFrame(() => {
+                    const currentEditor = window.monacoEditor || editor;
+                    if (currentEditor) {
+                      const model = currentEditor.getModel();
+                      if (model) {
+                        // Get the complete range from selected cells
+                        let minRow = Infinity, maxRow = -Infinity;
+                        let minCol = Infinity, maxCol = -Infinity;
                         
-                        // Get the text that will be deleted
-                        const textToDelete = model.getValueInRange(replaceRange);
-                        
-                        // Replace immediately
-                        window.isProgrammaticCursorChange = true;
-                        currentEditor.executeEdits('replace-last-reference', [{
-                          range: replaceRange,
-                          text: cellRefText
-                        }]);
-                        window.isProgrammaticCursorChange = false;
-                        
-                        // Log after replacement reference is known
-                        console.log(`Delete ${textToDelete} replaced with ${cellRefText}`);
-                        
-                        // Defer visual selection update until after editor renders
-                        requestAnimationFrame(() => {
-                          // Update visual selection to new clicked cell position - batched DOM updates
-                          // Check if already selected to skip rendering
-                          const isAlreadySelected = clickedCell && clickedCell !== editingCell && clickedCell.classList.contains("selected");
-                          
-                          if (!isAlreadySelected) {
-                            // Clear all selections first (except anchor) - batch operation
-                            const allSelectedCells = document.querySelectorAll('.selected');
-                            for (let i = 0; i < allSelectedCells.length; i++) {
-                              const selCell = allSelectedCells[i];
-                              if (selCell !== editingCell) {
-                                selCell.classList.remove("selected");
-                                selCell.removeAttribute("data-selection-edge");
-                                selectedCells.delete(selCell);
-                              }
-                            }
-                            
-                            // Add clicked cell to selection in one operation
-                            if (clickedCell && clickedCell !== editingCell) {
-                              clickedCell.classList.add("selected");
-                              selectedCells.add(clickedCell);
-                              updateHeaderHighlightsFromSelection();
-                            }
+                        selectedCells.forEach(cell => {
+                          const row = parseInt(cell.getAttribute("data-row"));
+                          const col = parseInt(cell.getAttribute("data-col"));
+                          if (!isNaN(row) && !isNaN(col)) {
+                            minRow = Math.min(minRow, row);
+                            maxRow = Math.max(maxRow, row);
+                            minCol = Math.min(minCol, col);
+                            maxCol = Math.max(maxCol, col);
                           }
                         });
+                        
+                        if (minRow !== Infinity && maxRow !== -Infinity && minCol !== Infinity && maxCol !== -Infinity) {
+                          // Find the actual range reference in the editor
+                          const fullText = model.getValue();
+                          const detectedRefs = detectCellReferences(fullText);
+                          const { lineNumber, columnNumber } = rangeStartCellRefPosition;
+                          
+                          // Find the range reference - be flexible with column matching (within 2 columns to account for prefix differences)
+                          const matchingRef = detectedRefs.find(r => {
+                            const refStartPos = model.getPositionAt(r.start);
+                            return refStartPos.lineNumber === lineNumber &&
+                                   Math.abs(refStartPos.column - columnNumber) <= 2 &&
+                                   r.text.includes(':');
+                          });
+                          
+                          if (matchingRef) {
+                            // Update rangeStartCellRefPosition to reflect the complete range from the editor
+                            // Use the ACTUAL detected position, not the stored one (fixes column mismatch)
+                            const refStartPos = model.getPositionAt(matchingRef.start);
+                            const refEndPos = model.getPositionAt(matchingRef.end);
+                            rangeStartCellRefPosition = {
+                              lineNumber: refStartPos.lineNumber,
+                              columnNumber: refStartPos.column,  // Use actual detected column, not stored one
+                              endColumn: refEndPos.column
+                            };
+                            
+                            // Update rangeEndCellRefPosition to track the end cell reference start position
+                            const startCellRef = addressToCellRef(minRow, minCol);
+                            const colonPos = model.getPositionAt(matchingRef.start);
+                            const colonOffset = model.getOffsetAt(colonPos) + startCellRef.length;
+                            const afterColonPos = model.getPositionAt(colonOffset + 1); // +1 for the colon
+                            
+                            rangeEndCellRefPosition = {
+                              lineNumber: lineNumber,
+                              columnNumber: afterColonPos.column,
+                              endColumn: refEndPos.column
+                            };
+                          }
+                        }
                       }
                     }
-                  }
+                  });
                 }
+                
+                isSelectingCellForFormula = false; // Stop formula cell selection
+                
+                // Don't reset rangeStartCellRefPosition and rangeEndCellRefPosition here
+                // They need to persist so we can find and replace the range on next mousedown
+                // They'll be reset when we actually replace the reference or exit edit mode
               }
               
-              // Reset selection state
+              // Reset selection state after processing
               isSelecting = false;
               selectionStart = null;
               isDragStart = false;
               
-              // Only reset edit-mode-specific variables if we're in edit mode
-              if (isInEditMode) {
-                isSelectingCellForFormula = false; // Stop formula cell selection
-                rangeStartCellRefPosition = null;
-                rangeEndCellRefPosition = null; // Reset range tracking on mouseup
-              } else {
+              if (!isInEditMode) {
                 // In ready mode, ensure selection overlay is updated after mouseup
                 if (selectedCells && selectedCells.size > 0) {
                   requestAnimationFrame(() => {
@@ -7455,8 +7450,106 @@ export async function initializeApp() {
                     isSelecting = true;
                     isDragStart = false; // Will be set to true on first mouseenter (drag)
                     selectionStart = cell; // Use clicked cell as start for range selection
-                    rangeStartCellRefPosition = null;
-                    rangeEndCellRefPosition = null; // Reset range tracking
+                    
+                    // Find and replace/delete the last range reference before inserting new one
+                    const currentEditor = window.monacoEditor || editor;
+                    if (currentEditor) {
+                      const model = currentEditor.getModel();
+                      if (model) {
+                        // Use rangeStartCellRefPosition for ranges (tracks complete range from start of "A1" to end of "B2" in "A1:B2")
+                        // Otherwise use lastSelectedCellRefPosition for single cell references
+                        const refPosition = rangeStartCellRefPosition || lastSelectedCellRefPosition;
+                        if (refPosition) {
+                          const { lineNumber, columnNumber } = refPosition;
+                          
+                          // Find the actual reference at this position
+                          const fullText = model.getValue();
+                          const detectedRefs = detectCellReferences(fullText);
+                          const isRange = !!(rangeStartCellRefPosition && rangeEndCellRefPosition);
+                          
+                          console.log('Looking for ref at:', { lineNumber, columnNumber, isRange, refPosition });
+                          console.log('All detected refs:', detectedRefs.map(r => {
+                            const startPos = model.getPositionAt(r.start);
+                            const endPos = model.getPositionAt(r.end);
+                            return {
+                              text: r.text,
+                              start: r.start,
+                              end: r.end,
+                              startPos: { lineNumber: startPos.lineNumber, column: startPos.column },
+                              endPos: { lineNumber: endPos.lineNumber, column: endPos.column }
+                            };
+                          }));
+                          console.log('Editor text:', JSON.stringify(fullText));
+                          console.log('Editor text at column 2:', fullText.split('\n')[lineNumber - 1]?.charAt(columnNumber - 1));
+                          
+                          // Find references that start at the correct position
+                          const candidates = detectedRefs.filter(r => {
+                            const refStartPos = model.getPositionAt(r.start);
+                            const matches = refStartPos.lineNumber === lineNumber && 
+                                           refStartPos.column === columnNumber;
+                            console.log(`Filtering ref "${r.text}" (offset ${r.start}): startPos={line:${refStartPos.lineNumber}, col:${refStartPos.column}}, looking for {line:${lineNumber}, col:${columnNumber}}, matches: ${matches}`);
+                            return matches;
+                          });
+                          
+                          // If we have a range, match the complete range (start to end)
+                          // Otherwise match by end position
+                          let matchingRef = null;
+                          if (isRange) {
+                            // For ranges, match the complete range using stored endColumn (start of A1 to end of B2)
+                            const targetEndColumn = refPosition.endColumn;
+                            console.log('Candidates found:', candidates.length, candidates.map(r => ({
+                            text: r.text,
+                            startPos: model.getPositionAt(r.start),
+                            endPos: model.getPositionAt(r.end)
+                          })));
+                          console.log('Matching range - targetEndColumn:', targetEndColumn, 'refPosition:', refPosition);
+                          matchingRef = candidates.find(r => {
+                            const refEndPos = model.getPositionAt(r.end);
+                            const matches = refEndPos.lineNumber === lineNumber &&
+                                           refEndPos.column === targetEndColumn &&
+                                           r.text.includes(':');
+                            console.log('Checking candidate:', r.text, 'endPos:', { lineNumber: refEndPos.lineNumber, column: refEndPos.column }, 'targetEndColumn:', targetEndColumn, 'matches:', matches);
+                            return matches;
+                          });
+                          } else {
+                            // For single cells, match by end position
+                            const targetEndColumn = refPosition.endColumn;
+                            matchingRef = candidates.find(r => {
+                              const refEndPos = model.getPositionAt(r.end);
+                              return refEndPos.lineNumber === lineNumber &&
+                                     refEndPos.column === targetEndColumn;
+                            });
+                          }
+                          
+                          if (matchingRef) {
+                            const startPos = model.getPositionAt(matchingRef.start);
+                            const endPos = model.getPositionAt(matchingRef.end);
+                            const replaceRange = new monaco.Range(startPos.lineNumber, startPos.column, endPos.lineNumber, endPos.column);
+                            
+                            // Get the text that will be deleted
+                            const textToDelete = model.getValueInRange(replaceRange);
+                            
+                            // Delete the reference
+                            window.isProgrammaticCursorChange = true;
+                            currentEditor.executeEdits('delete-last-reference', [{
+                              range: replaceRange,
+                              text: ''
+                            }]);
+                            window.isProgrammaticCursorChange = false;
+                            
+                            // Log after deletion
+                            console.log(`Delete ${textToDelete}`);
+                            
+                            // Reset range tracking after successfully deleting the old reference
+                            rangeStartCellRefPosition = null;
+                            rangeEndCellRefPosition = null;
+                          } else {
+                            console.log('No matching ref found!');
+                          }
+                        }
+                      }
+                    }
+                    
                     const clickedCellRef = cell.getAttribute("data-ref");
                     if (clickedCellRef) {
                       const clickedRow = parseInt(cell.getAttribute("data-row"));
@@ -7467,8 +7560,45 @@ export async function initializeApp() {
                       insertOrReplaceCellReference(cellRefText, false);
                       
                       // Set rangeStartCellRefPosition after insertion completes
+                      // Detect the actual reference position in the editor (accounts for "= " prefix)
                       Promise.resolve().then(() => {
-                        rangeStartCellRefPosition = lastSelectedCellRefPosition;
+                        const currentEditor = window.monacoEditor || editor;
+                        if (currentEditor) {
+                          const model = currentEditor.getModel();
+                          if (model && lastSelectedCellRefPosition) {
+                            // Detect the reference we just inserted to get its actual position
+                            const fullText = model.getValue();
+                            const detectedRefs = detectCellReferences(fullText);
+                            const { lineNumber, columnNumber, endColumn } = lastSelectedCellRefPosition;
+                            
+                            // Find the reference that matches what we just inserted
+                            // Look for any reference on the same line that matches the text we inserted
+                            const matchingRef = detectedRefs.find(r => {
+                              const refStartPos = model.getPositionAt(r.start);
+                              // Find refs on the same line that match the text (position may vary due to "= " prefix)
+                              return refStartPos.lineNumber === lineNumber && 
+                                     r.text === cellRefText;
+                            });
+                            
+                            if (matchingRef) {
+                              // Use the actual detected position, not the insertion position
+                              const actualStartPos = model.getPositionAt(matchingRef.start);
+                              const actualEndPos = model.getPositionAt(matchingRef.end);
+                              rangeStartCellRefPosition = {
+                                lineNumber: actualStartPos.lineNumber,
+                                columnNumber: actualStartPos.column,
+                                endColumn: actualEndPos.column
+                              };
+                            } else {
+                              // Fallback to stored position if detection fails
+                              rangeStartCellRefPosition = lastSelectedCellRefPosition;
+                            }
+                          } else {
+                            rangeStartCellRefPosition = lastSelectedCellRefPosition;
+                          }
+                        } else {
+                          rangeStartCellRefPosition = lastSelectedCellRefPosition;
+                        }
                       });
                       
                       // Update visual selection to show clicked cell - batched DOM updates
@@ -7515,7 +7645,7 @@ export async function initializeApp() {
                     
                     // Handle ready mode selection
                     if (currentMode === MODES.READY && !isSelectingCellForFormula) {
-                      selectRange(selectionStart, cell);
+                    selectRange(selectionStart, cell);
                       return;
                     }
                     
@@ -7606,6 +7736,15 @@ export async function initializeApp() {
                               text: cellRefText
                             }]);
                             Promise.resolve().then(() => {
+                              // During drag, only update rangeEndCellRefPosition
+                              // Keep rangeStartCellRefPosition pointing to just the start cell (A1) so we can find "A1:" during drag
+                              const newEndColumn = afterColonColumn + cellRefText.length;
+                              rangeEndCellRefPosition = {
+                                lineNumber: lineNumber,
+                                columnNumber: afterColonColumn,
+                                endColumn: newEndColumn
+                              };
+                              // Don't update rangeStartCellRefPosition.endColumn during drag - it should stay at the end of "A1"
                               window.isProgrammaticCursorChange = false;
                             });
                           } else {
@@ -7618,6 +7757,15 @@ export async function initializeApp() {
                               text: cellRefText
                             }]);
                             Promise.resolve().then(() => {
+                              // During drag, only update rangeEndCellRefPosition
+                              // Keep rangeStartCellRefPosition pointing to just the start cell (A1) so we can find "A1:" during drag
+                              const newEndColumn = afterColonColumn + cellRefText.length;
+                              rangeEndCellRefPosition = {
+                                lineNumber: lineNumber,
+                                columnNumber: afterColonColumn,
+                                endColumn: newEndColumn
+                              };
+                              // Don't update rangeStartCellRefPosition.endColumn during drag - it should stay at the end of "A1"
                               window.isProgrammaticCursorChange = false;
                             });
                           }
