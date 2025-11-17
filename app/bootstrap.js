@@ -10,6 +10,8 @@ import {
   extendWithCustomFunctions,
   BASE_CHIP_COLORS
 } from '../utils/helpers.js';
+import { createHandsontableGrid } from './grid/handsontableAdapter.js';
+import { createHyperFormulaAdapter } from './grid/hyperformulaAdapter.js';
 import { createDiagnosticsProvider as createExternalDiagnosticsProvider } from '../utils/diagnostics.js';
 import {
   generateValueFill,
@@ -79,9 +81,12 @@ export async function initializeApp() {
           }
 
           const monacoEditorContainer = document.getElementById("monacoEditor");
-          const gridBody = document.getElementById("gridBody");
-          const gridHeaderElement = document.getElementById("gridHeader");
+          const handsontableRoot = document.getElementById("handsontableRoot");
           const gridWrapperInner = document.getElementById("gridWrapperInner");
+          let gridBody = null;
+          let gridHeaderElement = null;
+          let rowHeaderElement = null;
+          let handsontableController = null;
           const fillHandleElement = document.getElementById("fillHandle");
         const clappyTranscript = document.getElementById("clappyTranscript");
         const clappyForm = document.getElementById("clappyForm");
@@ -281,12 +286,8 @@ export async function initializeApp() {
             ["Eve", "Item5", 18, 14.99, "2025-01-29", "INV-005"]
           ];
 
-          if (!gridBody) {
-            console.error("gridBody not found - cannot build grid!");
-            return;
-          }
-          if (!gridHeaderElement) {
-            console.error("gridHeader not found - cannot build grid!");
+          if (!handsontableRoot) {
+            console.error("handsontableRoot not found - cannot build grid!");
             return;
           }
           let selectionDragPreview = null;
@@ -4807,130 +4808,66 @@ export async function initializeApp() {
           }
 
           // Function to update a cell's display from HyperFormula
+          // Now uses the HyperFormula adapter for Handsontable integration
           function updateCellDisplay(cellRef) {
-            if (!window.hf) return;
+            if (window.hyperFormulaAdapter) {
+              // Use the adapter if available (Handsontable mode)
+              window.hyperFormulaAdapter.updateCellDisplay(cellRef);
+            } else if (window.hf && gridBody) {
+              // Fallback to old DOM-based method if adapter not initialized yet
+              // This can happen during initial load before grid is built
+              const address = cellRefToAddress(cellRef);
+              if (!address) return;
 
-            const address = cellRefToAddress(cellRef);
-            if (!address) return;
+              const [row, col] = address;
+              const sheetId = 0;
 
-            const [row, col] = address;
-            const sheetId = 0;
-
-            try {
-              // First, check if cell has a formula
-              let hasFormula = false;
-              let storedFormula = null;
               try {
-                storedFormula = window.hf.getCellFormula({ col, row, sheet: sheetId });
-                if (storedFormula) {
-                  hasFormula = true;
-                }
-              } catch (e) {
-                // Cell doesn't have a formula, it's a plain value
-                hasFormula = false;
-              }
-
-              // Get the calculated value from HyperFormula
-              const cellValue = window.hf.getCellValue({ col, row, sheet: sheetId });
-
-              // Update the display in the grid
-              const cell = gridBody.querySelector(`td[data-ref="${cellRef}"]`);
-              if (cell) {
-                const isShowingFormulaText = cell.getAttribute("data-showing-formula-text") === "true";
-                const display = cell.querySelector(".grid-cell-display");
-                if (display) {
-                  // Show the calculated result (without "=" prefix) unless we're mirroring the formula text
-                  const displayValue = cellValue !== null && cellValue !== undefined ? cellValue.toString() : "";
-                  if (!isShowingFormulaText) {
+                const cellValue = window.hf.getCellValue({ col, row, sheet: sheetId });
+                const cell = gridBody.querySelector(`td[data-ref="${cellRef}"]`);
+                if (cell) {
+                  const display = cell.querySelector(".grid-cell-display");
+                  if (display) {
+                    const displayValue = cellValue !== null && cellValue !== undefined ? cellValue.toString() : "";
                     display.textContent = displayValue;
                   }
-
-                  // Store the formula or value in data-formula attribute for quick retrieval
-                  // Formulas have "=" prefix, plain values don't
-                  if (hasFormula && storedFormula) {
-                    cell.setAttribute("data-formula", storedFormula);
-                  } else if (cellValue !== null && cellValue !== undefined && cellValue !== "") {
-                    // Store plain value (without "=" prefix) so selectCell can retrieve it
-                    cell.setAttribute("data-formula", cellValue.toString());
-                  } else {
-                    // Empty cell - clear the attribute
-                    cell.removeAttribute("data-formula");
-                  }
-
-                  // Determine if value is a number or date (right-align) vs text (left-align)
-                  let isNumber = false;
-                  if (cellValue !== null && cellValue !== undefined && displayValue !== '') {
-                    // Check if it's a JavaScript number type
-                    if (typeof cellValue === 'number') {
-                      isNumber = true;
-                    } else {
-                      // Check if string represents a number (including dates which are serial numbers)
-                      const numValue = parseFloat(displayValue);
-                      if (!isNaN(numValue) && isFinite(numValue) && displayValue.trim() !== '') {
-                        // Additional check: if it's a valid number string
-                        const trimmed = displayValue.trim();
-                        // Match numbers: integers, decimals, scientific notation, but not text that starts with numbers
-                        if (/^-?\d+\.?\d*([eE][+-]?\d+)?$/.test(trimmed)) {
-                          isNumber = true;
-                        }
-                      }
-                    }
-                  }
-
-                  // Apply alignment: right for numbers/dates, left for text
-                  if (isNumber) {
-                    display.style.textAlign = 'right';
-                    cell.classList.add('cell-numeric');
-                    cell.classList.remove('cell-text');
-                  } else {
-                    display.style.textAlign = 'left';
-                    cell.classList.add('cell-text');
-                    cell.classList.remove('cell-numeric');
-                  }
                 }
+              } catch (error) {
+                console.error(`Error updating cell display for ${cellRef}:`, error);
               }
-            } catch (error) {
-              console.error(`Error updating cell display for ${cellRef}:`, error);
             }
           }
 
           // Function to get all dependent cells for a given cell address
+          // Now uses the HyperFormula adapter when available
           function getDependentCells(row, col, sheetId) {
             if (!window.hf) return [];
 
+            // Use adapter if available (Handsontable mode)
+            if (window.hyperFormulaAdapter) {
+              return window.hyperFormulaAdapter.getDependentCells(row, col);
+            }
+
+            // Fallback to old DOM-based method
             const dependentCells = [];
 
             try {
-              // Iterate through all cells that are rendered in the grid
-              // This is more efficient than checking all possible cells
               const changedCellRef = addressToCellRef(row, col);
-
-              // Find all cells in the grid that have formulas
-              const allCells = gridBody.querySelectorAll('td[data-ref]');
+              const allCells = gridBody ? gridBody.querySelectorAll('td[data-ref]') : [];
 
               allCells.forEach(cellElement => {
                 const cellRef = cellElement.getAttribute("data-ref");
                 if (!cellRef) return;
 
-                // Check if this cell has a stored formula
                 const storedFormula = cellElement.getAttribute("data-formula");
                 if (storedFormula && storedFormula.startsWith("=")) {
-                  // Check if the formula references the changed cell
-                  // Build a regex that matches the cell reference (handling $ for absolute references)
-                  // Match both A1 and $A$1, $A1, A$1 variants
-                  const baseRef = changedCellRef; // e.g., "A1"
+                  const baseRef = changedCellRef;
                   const colLetter = baseRef.match(/^([A-Z]+)/i)?.[1] || "";
                   const rowNum = baseRef.match(/(\d+)$/)?.[1] || "";
-
-                  // Create regex pattern that matches cell reference in all its forms: A1, $A$1, $A1, A$1
-                  // Escape the column letter for regex
                   const escapedColLetter = colLetter.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
                   const pattern = new RegExp(`\\$?${escapedColLetter}\\$?${rowNum}\\b`, 'i');
 
-                  // Check if pattern matches
-                  const referencesChangedCell = pattern.test(storedFormula);
-
-                  if (referencesChangedCell) {
+                  if (pattern.test(storedFormula)) {
                     const depAddress = cellRefToAddress(cellRef);
                     if (depAddress) {
                       const [depRow, depCol] = depAddress;
@@ -4938,7 +4875,6 @@ export async function initializeApp() {
                     }
                   }
                 } else {
-                  // If no stored formula, try to get it from HyperFormula
                   const depAddress = cellRefToAddress(cellRef);
                   if (depAddress) {
                     const [depRow, depCol] = depAddress;
@@ -6098,6 +6034,27 @@ export async function initializeApp() {
             if (!startCell || !endCell) return;
             selectionAnchorCell = startCell;
 
+            // If using Handsontable, don't add custom selection classes
+            // Handsontable handles visual selection natively
+            if (window.handsontableInstance) {
+              // Just update internal state for range
+              const startRow = parseInt(startCell.getAttribute("data-row"));
+              const startCol = parseInt(startCell.getAttribute("data-col"));
+              const endRow = parseInt(endCell.getAttribute("data-row"));
+              const endCol = parseInt(endCell.getAttribute("data-col"));
+              
+              // Update Handsontable selection programmatically
+              window.handsontableInstance.selectCell(startRow, startCol, endRow, endCol);
+              
+              // Hide custom overlay
+              const selectionOverlayElement = document.getElementById("selectionOverlay");
+              if (selectionOverlayElement) {
+                selectionOverlayElement.style.display = "none";
+              }
+              updateHeaderHighlightsFromSelection();
+              return;
+            }
+
             const startRow = parseInt(startCell.getAttribute("data-row"));
             const startCol = parseInt(startCell.getAttribute("data-col"));
             const endRow = parseInt(endCell.getAttribute("data-row"));
@@ -6111,7 +6068,9 @@ export async function initializeApp() {
             // Select all cells in the range (skip headers)
             for (let r = minRow; r <= maxRow; r++) {
               for (let c = minCol; c <= maxCol; c++) {
-                const cell = gridBody.querySelector(`tr[data-row="${r}"] td[data-col="${c}"]`);
+                // Support both old DOM structure and Handsontable structure
+                const cell = gridBody.querySelector(`td[data-row="${r}"][data-col="${c}"]`) ||
+                             gridBody.querySelector(`tr[data-row="${r}"] td[data-col="${c}"]`);
                 if (cell) {
                   // Skip row headers (first column)
                   const isRowHeader = cell === cell.parentElement.querySelector("td:first-child");
@@ -6141,7 +6100,8 @@ export async function initializeApp() {
             updateHeaderHighlightsFromSelection();
 
             // Update formula editor with first cell's value
-            const firstCell = gridBody.querySelector(`tr[data-row="${minRow}"] td[data-col="${minCol}"]`);
+            const firstCell = gridBody.querySelector(`td[data-row="${minRow}"][data-col="${minCol}"]`) ||
+                              gridBody.querySelector(`tr[data-row="${minRow}"] td[data-col="${minCol}"]`);
             if (firstCell) {
               const isHeader = firstCell.tagName === "TH" || firstCell === firstCell.parentElement.querySelector("td:first-child");
               if (!isHeader) {
@@ -6290,7 +6250,9 @@ export async function initializeApp() {
             const targetRow = Math.max(0, Math.min(maxRow, currentRow + deltaRow));
             const targetCol = Math.max(0, Math.min(maxCol, currentCol + deltaCol));
 
-            const targetCell = gridBody.querySelector(`tr[data-row="${targetRow}"] td[data-col="${targetCol}"]`);
+            // Support both Handsontable structure and old DOM structure
+            const targetCell = gridBody.querySelector(`td[data-row="${targetRow}"][data-col="${targetCol}"]`) ||
+                               gridBody.querySelector(`tr[data-row="${targetRow}"] td[data-col="${targetCol}"]`);
             if (!targetCell) return;
 
             if (extendSelection) {
@@ -6306,6 +6268,32 @@ export async function initializeApp() {
           // Function to select a single cell programmatically (selection mode)
           function selectCell(cell) {
             if (!cell) return;
+            
+            // If using Handsontable, use its native selection
+            if (window.handsontableInstance) {
+              const row = parseInt(cell.getAttribute("data-row"));
+              const col = parseInt(cell.getAttribute("data-col"));
+              if (!isNaN(row) && !isNaN(col)) {
+                // Use Handsontable's native selection
+                window.handsontableInstance.selectCell(row, col);
+              }
+              
+              // Update internal state
+              clearSelection();
+              selectedCells.add(cell);
+              window.selectedCell = cell;
+              selectionAnchorCell = cell;
+              
+              // Hide custom overlay - Handsontable has its own
+              const selectionOverlayElement = document.getElementById("selectionOverlay");
+              if (selectionOverlayElement) {
+                selectionOverlayElement.style.display = "none";
+              }
+              updateHeaderHighlightsFromSelection();
+              return;
+            }
+            
+            // Old DOM-based selection (fallback)
             clearSelection();
             selectedCells.add(cell);
             cell.classList.add("selected");
@@ -7551,845 +7539,223 @@ export async function initializeApp() {
 
           function finalizeFormulaSelectionIfNeeded() {}
 
+          function attachGridCellListeners(cell) {
+            if (!cell || cell.dataset.listenersAttached === 'true') {
+              return;
+            }
+            cell.dataset.listenersAttached = 'true';
+            // Keep mousedown/mouseenter/mouseup for drag selection if needed
+            // But disable click handler - Handsontable handles selection natively
+            cell.addEventListener('mousedown', handleGridCellMouseDown);
+            cell.addEventListener('mouseenter', handleGridCellMouseEnter);
+            cell.addEventListener('mouseup', handleGridCellMouseUp);
+            // Don't attach click - let Handsontable handle it
+            // cell.addEventListener('click', handleGridCellClick);
+            // Keep dblclick for edit mode
+            cell.addEventListener('dblclick', handleGridCellDoubleClick);
+          }
+
+          function handleGridCellMouseDown(event) {
+            if (event.button !== 0) return;
+            const cell = event.currentTarget;
+            if (!cell) return;
+            if (event.detail === 2) return;
+
+            if (currentMode === MODES.EDIT || currentMode === MODES.ENTER) {
+              arrowKeysInGridMode = true;
+              const editingCell = window.selectedCell;
+              const hasChanged = hasFormulaChanged();
+
+              if (!hasChanged) {
+                cancelEditingSession();
+                if (cell !== editingCell) {
+                  selectCell(cell);
+                }
+                event.preventDefault();
+                return;
+              }
+
+              isSelectingCellForFormula = true;
+            }
+
+            isSelecting = true;
+            selectionStart = cell;
+            selectCell(cell);
+            event.preventDefault();
+          }
+
+          function handleGridCellMouseEnter(event) {
+            if (!isSelecting || !selectionStart) return;
+            if (currentMode !== MODES.READY || isSelectingCellForFormula) return;
+            const cell = event.currentTarget;
+            if (!cell) return;
+            selectRange(selectionStart, cell);
+          }
+
+          function handleGridCellMouseUp() {
+            if (!isSelecting) return;
+            isSelecting = false;
+            selectionStart = null;
+            updateSelectionOverlay();
+          }
+
+          function handleGridCellClick(event) {
+            if (currentMode !== MODES.READY) {
+              event.preventDefault();
+              event.stopPropagation();
+              return;
+            }
+            if (isSelecting) {
+              return;
+            }
+            const cell = event.currentTarget;
+            if (!cell) return;
+            enterSelectionModeAndSelectCell(cell);
+          }
+
+          function handleGridCellDoubleClick(event) {
+            event.preventDefault();
+            event.stopPropagation();
+            const cell = event.currentTarget;
+            if (!cell) return;
+            enterEditMode(cell);
+          }
+
           function buildGrid(rows = 150, columns = 50) {
             console.log("buildGrid function called with rows:", rows, "columns:", columns);
             window.totalGridRows = rows;
             window.totalGridColumns = columns;
-            if (!gridHeaderElement) {
-              console.error("gridHeader not found!");
-              return;
-            }
-            const headerRow = gridHeaderElement.querySelector("tr");
-            if (!headerRow) {
-              console.error("headerRow not found!");
+            
+            if (!handsontableRoot) {
+              console.error("handsontableRoot not found!");
               return;
             }
 
-            // Generate column headers
-            const headers = Array.from({ length: columns }, (_, i) => {
-              let col = "";
-              let num = i;
-              do {
-                col = String.fromCharCode(65 + (num % 26)) + col;
-                num = Math.floor(num / 26) - 1;
-              } while (num >= 0);
-              return col;
-            });
-
-            // Add header cells with resizing
-            // Use a shared resizing state outside the loop
-            if (!window.gridColumnResizing) {
-              window.gridColumnResizing = {
-                current: null,
-                handleMouseMove: null,
-                handleMouseUp: null,
-                justResized: false // Flag to prevent selection after resize
-              };
-            }
-
-            headers.forEach((header, index) => {
-              const th = document.createElement("th");
-              th.scope = "col";
-              th.textContent = header;
-              th.style.width = "80px";
-              th.setAttribute("data-col-index", index);
-
-              // Add column resizing with better detection
-              const handleColResize = (e) => {
-                const rect = th.getBoundingClientRect();
-                const rightEdge = rect.right;
-                // Check if click is within 10px of right edge
-                if (e.clientX >= rightEdge - 10) {
-                  window.gridColumnResizing.current = {
-                    th: th,
-                    colIndex: index,
-                    startX: e.clientX,
-                    startWidth: th.offsetWidth
-                  };
-                  document.body.style.cursor = "col-resize";
-                  e.preventDefault();
-                  e.stopPropagation();
-                  e.stopImmediatePropagation();
-                  return true;
+            // Create Handsontable instance
+            handsontableController = createHandsontableGrid({
+              container: handsontableRoot,
+              rows,
+              columns,
+              onCellRender: (cellElement, row, column) => {
+                // Attach event listeners to each cell as it's rendered
+                attachGridCellListeners(cellElement);
+              },
+              onSelection: (startRow, startCol, endRow, endCol) => {
+                // Handle Handsontable selection event
+                // Let Handsontable handle visual selection natively - don't call old selectCell/selectRange
+                // We just need to update our UI (formula editor, etc.)
+                if (currentMode !== MODES.READY) return;
+                
+                const body = handsontableController.getBodyElement();
+                if (!body) return;
+                
+                // Hide custom selection overlay - Handsontable has its own
+                const selectionOverlayElement = document.getElementById("selectionOverlay");
+                if (selectionOverlayElement) {
+                  selectionOverlayElement.style.display = "none";
                 }
-                return false;
-              };
-
-              // Use capture phase to ensure this runs first
-              th.addEventListener("mousedown", handleColResize, true);
-
-              // Allow column headers to be selected (but not visually highlighted)
-              th.addEventListener("click", (e) => {
-                if (currentMode !== MODES.READY) {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  return;
-                }
-                // Only select if not resizing and resize didn't just happen
-                if (!window.gridColumnResizing.current && !window.gridColumnResizing.justResized) {
-                  selectCell(th);
-                } else if (window.gridColumnResizing.justResized) {
-                  // Prevent selection if we just resized
-                  e.preventDefault();
-                  e.stopPropagation();
-                }
-              });
-
-              // Add cursor feedback for column headers
-              th.addEventListener("mousemove", (e) => {
-                const rect = th.getBoundingClientRect();
-                const rightEdge = rect.right;
-                if (e.clientX >= rightEdge - 10) {
-                  th.style.cursor = "col-resize";
-                } else {
-                  th.style.cursor = "default";
-                }
-              });
-
-              // Double-click to auto-resize column
-              th.addEventListener("dblclick", (e) => {
-                const rect = th.getBoundingClientRect();
-                const rightEdge = rect.right;
-                // Check if double-click is within 10px of right edge
-                if (e.clientX >= rightEdge - 10) {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  
-                  // Get all cells in this column
-                  const allCells = gridBody.querySelectorAll(`td[data-col="${index}"]`);
-                  
-                  // Create a temporary element to measure text width
-                  const measureEl = document.createElement('div');
-                  measureEl.style.position = 'absolute';
-                  measureEl.style.visibility = 'hidden';
-                  measureEl.style.whiteSpace = 'nowrap';
-                  measureEl.style.font = window.getComputedStyle(allCells[0] || th).font;
-                  document.body.appendChild(measureEl);
-                  
-                  let maxWidth = th.offsetWidth; // Start with header width
-                  
-                  // Measure header text
-                  measureEl.textContent = th.textContent || '';
-                  maxWidth = Math.max(maxWidth, measureEl.offsetWidth);
-                  
-                  // Measure all cell contents
-                  allCells.forEach(cell => {
-                    const cellText = cell.textContent || '';
-                    if (cellText.trim()) {
-                      measureEl.textContent = cellText;
-                      maxWidth = Math.max(maxWidth, measureEl.offsetWidth);
-                    }
-                  });
-                  
-                  document.body.removeChild(measureEl);
-                  
-                  // Add padding (left + right padding from cell)
-                  const sampleCell = allCells[0] || th;
-                  const computedStyle = window.getComputedStyle(sampleCell);
-                  const paddingLeft = parseFloat(computedStyle.paddingLeft) || 0;
-                  const paddingRight = parseFloat(computedStyle.paddingRight) || 0;
-                  const totalWidth = Math.max(40, maxWidth + paddingLeft + paddingRight + 20); // Minimum 40px, add extra 20px buffer
-                  
-                  // Set the width
-                  const widthStr = `${totalWidth}px`;
-                  th.style.width = widthStr;
-                  th.style.minWidth = widthStr;
-                  
-                  allCells.forEach(cell => {
-                    cell.style.width = widthStr;
-                    cell.style.minWidth = widthStr;
-                  });
-                  
-                  // Update selection overlay if needed
-                  if (typeof updateSelectionOverlay === 'function') {
-                    updateSelectionOverlay();
-                  }
-                }
-              });
-
-              headerRow.appendChild(th);
-            });
-
-            // Set up global mouse handlers only once
-            if (!window.gridColumnResizing.handleMouseMove) {
-              window.gridColumnResizing.rafId = null;
-              window.gridColumnResizing.handleMouseMove = (e) => {
-                if (window.gridColumnResizing.current) {
-                  // Cancel any pending animation frame
-                  if (window.gridColumnResizing.rafId) {
-                    cancelAnimationFrame(window.gridColumnResizing.rafId);
-                  }
-
-                  // Batch updates in requestAnimationFrame
-                  window.gridColumnResizing.rafId = requestAnimationFrame(() => {
-                    const resizing = window.gridColumnResizing.current;
-                    if (!resizing) return;
-
-                    const newWidth = resizing.startWidth + (e.clientX - resizing.startX);
-                    if (newWidth >= 40) {
-                      // Update header
-                      resizing.th.style.width = `${newWidth}px`;
-                      resizing.th.style.minWidth = `${newWidth}px`;
-
-                      // Update all cells in this column - batch DOM updates
-                      const allCells = gridBody.querySelectorAll(`td[data-col="${resizing.colIndex}"]`);
-                      const widthStr = `${newWidth}px`;
-                      for (let i = 0; i < allCells.length; i++) {
-                        allCells[i].style.width = widthStr;
-                        allCells[i].style.minWidth = widthStr;
-                      }
-
-                      // Update selection overlay to match new cell sizes (if there's a selection)
-                      if (typeof updateSelectionOverlay === 'function') {
-                        updateSelectionOverlay();
-                      }
-                    }
-                    window.gridColumnResizing.rafId = null;
-                  });
-                }
-              };
-
-              window.gridColumnResizing.handleMouseUp = () => {
-                if (window.gridColumnResizing.current) {
-                  // Cancel any pending animation frame
-                  if (window.gridColumnResizing.rafId) {
-                    cancelAnimationFrame(window.gridColumnResizing.rafId);
-                    window.gridColumnResizing.rafId = null;
-                  }
-                  // Set flag to prevent click from selecting
-                  window.gridColumnResizing.justResized = true;
-                  // Clear flag after a short delay to allow normal clicking later
-                  setTimeout(() => {
-                    window.gridColumnResizing.justResized = false;
-                  }, 100);
-                  window.gridColumnResizing.current = null;
-                  document.body.style.cursor = "";
-                }
-              };
-
-              document.addEventListener("mousemove", window.gridColumnResizing.handleMouseMove);
-              document.addEventListener("mouseup", window.gridColumnResizing.handleMouseUp);
-            }
-
-            // Initialize row resizing state
-            if (!window.gridRowResizing) {
-              window.gridRowResizing = {
-                current: null,
-                handleMouseMove: null,
-                handleMouseUp: null,
-                justResized: false // Flag to prevent selection after resize
-              };
-            }
-
-            // Set up row resizing handlers only once
-            if (!window.gridRowResizing.handleMouseMove) {
-              window.gridRowResizing.rafId = null;
-              window.gridRowResizing.handleMouseMove = (e) => {
-                if (window.gridRowResizing.current) {
-                  // Cancel any pending animation frame
-                  if (window.gridRowResizing.rafId) {
-                    cancelAnimationFrame(window.gridRowResizing.rafId);
-                  }
-
-                  // Batch updates in requestAnimationFrame
-                  window.gridRowResizing.rafId = requestAnimationFrame(() => {
-                    const resizing = window.gridRowResizing.current;
-                    if (!resizing) return;
-
-                    const newHeight = resizing.startHeight + (e.clientY - resizing.startY);
-                    if (newHeight >= 15) {
-                      // Update row
-                      resizing.row.style.height = `${newHeight}px`;
-                      resizing.row.style.minHeight = `${newHeight}px`;
-
-                      // Update all cells in this row - batch DOM updates
-                      const allCells = resizing.row.querySelectorAll("td");
-                      const heightStr = `${newHeight}px`;
-                      for (let i = 0; i < allCells.length; i++) {
-                        allCells[i].style.height = heightStr;
-                        allCells[i].style.minHeight = heightStr;
-                      }
-
-                      // Update selection overlay to match new cell sizes (if there's a selection)
-                      if (typeof updateSelectionOverlay === 'function') {
-                        updateSelectionOverlay();
-                      }
-                    }
-                    window.gridRowResizing.rafId = null;
-                  });
-                }
-              };
-
-              window.gridRowResizing.handleMouseUp = () => {
-                if (window.gridRowResizing.current) {
-                  // Cancel any pending animation frame
-                  if (window.gridRowResizing.rafId) {
-                    cancelAnimationFrame(window.gridRowResizing.rafId);
-                    window.gridRowResizing.rafId = null;
-                  }
-                  // Set flag to prevent click from selecting
-                  window.gridRowResizing.justResized = true;
-                  // Clear flag after a short delay to allow normal clicking later
-                  setTimeout(() => {
-                    window.gridRowResizing.justResized = false;
-                  }, 100);
-                  window.gridRowResizing.current = null;
-                  document.body.style.cursor = "";
-                }
-              };
-
-              document.addEventListener("mousemove", window.gridRowResizing.handleMouseMove);
-              document.addEventListener("mouseup", window.gridRowResizing.handleMouseUp);
-            }
-
-            const fragment = document.createDocumentFragment();
-
-            for (let r = 0; r < rows; r += 1) {
-              const rowElement = document.createElement("tr");
-              rowElement.setAttribute("data-row", r);
-              rowElement.style.height = "20px";
-
-              const indexCell = document.createElement("td");
-              indexCell.textContent = r + 1;
-              indexCell.setAttribute("data-row-index", r);
-              indexCell.style.pointerEvents = "auto";
-
-              // Add row resizing - handle both direct clicks and ::after pseudo-element
-              const handleRowResize = (e) => {
-                const rect = indexCell.getBoundingClientRect();
-                const bottomEdge = rect.bottom;
-                // Check if click is within 10px of bottom edge
-                if (e.clientY >= bottomEdge - 10) {
-                  window.gridRowResizing.current = {
-                    row: rowElement,
-                    rowIndex: r,
-                    startY: e.clientY,
-                    startHeight: rowElement.offsetHeight
-                  };
-                  document.body.style.cursor = "row-resize";
-                  e.preventDefault();
-                  e.stopPropagation();
-                  e.stopImmediatePropagation();
-                }
-              };
-
-              // Use capture phase to ensure this runs first
-              indexCell.addEventListener("mousedown", handleRowResize, true);
-
-              // Also handle mousemove to show cursor
-              indexCell.addEventListener("mousemove", (e) => {
-                const rect = indexCell.getBoundingClientRect();
-                const bottomEdge = rect.bottom;
-                if (e.clientY >= bottomEdge - 10) {
-                  indexCell.style.cursor = "row-resize";
-                } else {
-                  indexCell.style.cursor = "default";
-                }
-              });
-
-              // Allow row headers to be selected (but not visually highlighted)
-              indexCell.addEventListener("click", (e) => {
-                if (currentMode !== MODES.READY) {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  return;
-                }
-                // Only select if not resizing and resize didn't just happen
-                if (!window.gridRowResizing.current && !window.gridRowResizing.justResized) {
-                selectCell(indexCell);
-                } else if (window.gridRowResizing.justResized) {
-                  // Prevent selection if we just resized
-                  e.preventDefault();
-                  e.stopPropagation();
-                }
-              });
-
-              rowElement.appendChild(indexCell);
-
-              for (let c = 0; c < columns; c += 1) {
-                const cell = document.createElement("td");
-                cell.setAttribute("data-row", r);
-                cell.setAttribute("data-col", c);
-                cell.setAttribute("data-ref", `${headers[c]}${r + 1}`);
-                cell.style.width = "80px"; // Set initial width
-                cell.style.height = "20px"; // Set initial height
-
-                const display = document.createElement("span");
-                display.className = "grid-cell-display";
-                display.textContent = "";
-
-                cell.appendChild(display);
-
-                // Handle drag selection
-                cell.addEventListener("mousedown", (e) => {
-                  // Don't start selection if resizing
-                  if (window.gridColumnResizing.current || window.gridRowResizing.current) {
-                    return;
-                  }
-
-                  // Don't prevent default on double click
-                  if (e.detail === 2) {
-                    return;
-                  }
-
-                  // If in edit mode, handle clickout before selectCell updates the editor
-                  if (currentMode === MODES.EDIT || currentMode === MODES.ENTER) {
-                    // Set arrow keys to grid mode when clicking/dragging a cell WHILE already in edit mode
-                    arrowKeysInGridMode = true;
-                    const editingCell = window.selectedCell;
-                    const hasChanged = hasFormulaChanged();
+                
+                // Get the primary selected cell (start cell)
+                const cell = body.querySelector(`td[data-row="${startRow}"][data-col="${startCol}"]`);
+                if (!cell) return;
+                
+                // Update window.selectedCell for compatibility with existing code
+                window.selectedCell = cell;
+                
+                // Update formula editor with selected cell's value
+                const cellRef = cell.getAttribute("data-ref");
+                if (cellRef) {
+                  // Get cell value/formula and update editor
+                  const address = cellRefToAddress(cellRef);
+                  if (address) {
+                    const [row, col] = address;
+                    const sheetId = 0;
                     
-                    if (!hasChanged) {
-                      // Value hasn't changed, cancel like Escape
-                      cancelEditingSession();
-                      // If clicking a different cell, select it after canceling
-                      if (cell !== editingCell) {
-                        selectCell(cell);
-                      }
-                      e.preventDefault();
-                      return;
-                    }
-                    
-                    // Value has changed - stay in edit mode and insert cell reference
-                    isSelectingCellForFormula = true;
-                    isSelecting = true;
-                    isDragStart = false; // Will be set to true on first mouseenter (drag)
-                    selectionStart = cell; // Use clicked cell as start for range selection
-                    
-                    // Find and replace/delete the last range reference before inserting new one
-                    const currentEditor = window.monacoEditor || editor;
-                    if (currentEditor) {
-                      const model = currentEditor.getModel();
-                      if (model) {
-                        // Use rangeStartCellRefPosition for ranges (tracks complete range from start of "A1" to end of "B2" in "A1:B2")
-                        // Otherwise use lastSelectedCellRefPosition for single cell references
-                        const refPosition = rangeStartCellRefPosition || lastSelectedCellRefPosition;
-                        if (refPosition) {
-                          const { lineNumber, columnNumber } = refPosition;
-                          
-                          // Find the actual reference at this position
-                          const fullText = model.getValue();
-                          const detectedRefs = detectCellReferences(fullText);
-                          const isRange = !!(rangeStartCellRefPosition && rangeEndCellRefPosition);
-                          
-                          console.log('Looking for ref at:', { lineNumber, columnNumber, isRange, refPosition });
-                          console.log('All detected refs:', detectedRefs.map(r => {
-                            const startPos = model.getPositionAt(r.start);
-                            const endPos = model.getPositionAt(r.end);
-                            return {
-                              text: r.text,
-                              start: r.start,
-                              end: r.end,
-                              startPos: { lineNumber: startPos.lineNumber, column: startPos.column },
-                              endPos: { lineNumber: endPos.lineNumber, column: endPos.column }
-                            };
-                          }));
-                          console.log('Editor text:', JSON.stringify(fullText));
-                          console.log('Editor text at column 2:', fullText.split('\n')[lineNumber - 1]?.charAt(columnNumber - 1));
-                          
-                          // Find references that start at the correct position
-                          // Be flexible with column matching (within 2 columns) to account for prefix differences
-                          const candidates = detectedRefs.filter(r => {
-                            const refStartPos = model.getPositionAt(r.start);
-                            const matches = refStartPos.lineNumber === lineNumber && 
-                                           Math.abs(refStartPos.column - columnNumber) <= 2;
-                            console.log(`Filtering ref "${r.text}" (offset ${r.start}): startPos={line:${refStartPos.lineNumber}, col:${refStartPos.column}}, looking for {line:${lineNumber}, col:${columnNumber}}, matches: ${matches}`);
-                            return matches;
-                          });
-                          
-                          // If we have a range, match the complete range (start to end)
-                          // Otherwise match by end position
-                          let matchingRef = null;
-                          if (isRange) {
-                            // For ranges, match the complete range using stored endColumn (start of A1 to end of B2)
-                            const targetEndColumn = refPosition.endColumn;
-                            console.log('Candidates found:', candidates.length, candidates.map(r => ({
-                            text: r.text,
-                            startPos: model.getPositionAt(r.start),
-                            endPos: model.getPositionAt(r.end)
-                          })));
-                          console.log('Matching range - targetEndColumn:', targetEndColumn, 'refPosition:', refPosition);
-                          matchingRef = candidates.find(r => {
-                            const refEndPos = model.getPositionAt(r.end);
-                            const matches = refEndPos.lineNumber === lineNumber &&
-                                           refEndPos.column === targetEndColumn &&
-                                           r.text.includes(':');
-                            console.log('Checking candidate:', r.text, 'endPos:', { lineNumber: refEndPos.lineNumber, column: refEndPos.column }, 'targetEndColumn:', targetEndColumn, 'matches:', matches);
-                            return matches;
-                          });
-                          } else {
-                            // For single cells, match by end position
-                            // Be flexible with end column matching (within 2 columns) to account for prefix differences
-                            const targetEndColumn = refPosition.endColumn;
-                            console.log('Matching single cell - targetEndColumn:', targetEndColumn, 'candidates:', candidates.length);
-                            matchingRef = candidates.find(r => {
-                              const refEndPos = model.getPositionAt(r.end);
-                              const matches = refEndPos.lineNumber === lineNumber &&
-                                             Math.abs(refEndPos.column - targetEndColumn) <= 2 &&
-                                             !r.text.includes(':'); // Single cells don't have colons
-                              console.log('Checking single cell candidate:', r.text, 'endPos:', { lineNumber: refEndPos.lineNumber, column: refEndPos.column }, 'targetEndColumn:', targetEndColumn, 'matches:', matches);
-                              return matches;
-                            });
-                          }
-                          
-                          if (matchingRef) {
-                            const startPos = model.getPositionAt(matchingRef.start);
-                            const endPos = model.getPositionAt(matchingRef.end);
-                            const replaceRange = new monaco.Range(startPos.lineNumber, startPos.column, endPos.lineNumber, endPos.column);
-                            
-                            // Get the text that will be deleted
-                            const textToDelete = model.getValueInRange(replaceRange);
-                            
-                            // Delete the reference
-                            window.isProgrammaticCursorChange = true;
-                            currentEditor.executeEdits('delete-last-reference', [{
-                              range: replaceRange,
-                              text: ''
-                            }]);
-                            window.isProgrammaticCursorChange = false;
-                            
-                            // Log after deletion
-                            console.log(`Delete ${textToDelete}`);
-                            
-                            // Reset range tracking after successfully deleting the old reference
-                            rangeStartCellRefPosition = null;
-                            rangeEndCellRefPosition = null;
-                          } else {
-                            console.log('No matching ref found!');
-                          }
+                    let editorValue = "";
+                    try {
+                      const cellFormula = window.hf.getCellFormula({ col, row, sheet: sheetId });
+                      if (cellFormula) {
+                        editorValue = cellFormula.startsWith("=") ? cellFormula.substring(1) : cellFormula;
+                      } else {
+                        const cellValue = window.hf.getCellValue({ col, row, sheet: sheetId });
+                        if (cellValue !== null && cellValue !== undefined && cellValue !== "") {
+                          editorValue = cellValue.toString();
                         }
                       }
+                    } catch (e) {
+                      // Cell might be empty
                     }
                     
-                    const clickedCellRef = cell.getAttribute("data-ref");
-                    if (clickedCellRef) {
-                      const clickedRow = parseInt(cell.getAttribute("data-row"));
-                      const clickedCol = parseInt(cell.getAttribute("data-col"));
-                      const cellRefText = addressToCellRef(clickedRow, clickedCol);
-                      
-                      // Insert or replace the cell reference
-                      insertOrReplaceCellReference(cellRefText, false);
-                      
-                      // Set rangeStartCellRefPosition after insertion completes
-                      // Detect the actual reference position in the editor (accounts for "= " prefix)
-                      Promise.resolve().then(() => {
-                        const currentEditor = window.monacoEditor || editor;
-                        if (currentEditor) {
-                          const model = currentEditor.getModel();
-                          if (model && lastSelectedCellRefPosition) {
-                            // Detect the reference we just inserted to get its actual position
-                            const fullText = model.getValue();
-                            const detectedRefs = detectCellReferences(fullText);
-                            const { lineNumber, columnNumber, endColumn } = lastSelectedCellRefPosition;
-                            
-                            // Find the reference that matches what we just inserted
-                            // Look for any reference on the same line that matches the text we inserted
-                            const matchingRef = detectedRefs.find(r => {
-                              const refStartPos = model.getPositionAt(r.start);
-                              // Find refs on the same line that match the text (position may vary due to "= " prefix)
-                              return refStartPos.lineNumber === lineNumber && 
-                                     r.text === cellRefText;
-                            });
-                            
-                            if (matchingRef) {
-                              // Use the actual detected position, not the insertion position
-                              const actualStartPos = model.getPositionAt(matchingRef.start);
-                              const actualEndPos = model.getPositionAt(matchingRef.end);
-                              const actualPosition = {
-                                lineNumber: actualStartPos.lineNumber,
-                                columnNumber: actualStartPos.column,
-                                endColumn: actualEndPos.column
-                              };
-                              // Update both rangeStartCellRefPosition (for ranges) and lastSelectedCellRefPosition (for single cells)
-                              rangeStartCellRefPosition = actualPosition;
-                              lastSelectedCellRefPosition = actualPosition;
-                            } else {
-                              // Fallback to stored position if detection fails
-                              rangeStartCellRefPosition = lastSelectedCellRefPosition;
-                            }
-                          } else {
-                            rangeStartCellRefPosition = lastSelectedCellRefPosition;
-                          }
-                        } else {
-                          rangeStartCellRefPosition = lastSelectedCellRefPosition;
-                        }
+                    // Update Monaco editor
+                    const currentEditor = window.monacoEditor;
+                    if (currentEditor && typeof currentEditor.setValue === 'function') {
+                      const fullValue = ensureSevenLines(editorValue || "");
+                      requestAnimationFrame(() => {
+                        currentEditor.setValue(fullValue);
+                        const line1Content = (editorValue || "").split('\n')[0] || "";
+                        const targetColumn = Math.max(1, line1Content.length + 1);
+                        currentEditor.setPosition({ lineNumber: 1, column: targetColumn });
                       });
-                      
-                      // Update visual selection to show clicked cell - batched DOM updates
-                      // Check if already selected to skip rendering
-                      const isAlreadySelected = cell !== editingCell && cell.classList.contains("selected");
-                      
-                      if (!isAlreadySelected) {
-                        // Clear all selections first (except anchor) - batch operation
-                        const allSelectedCells = document.querySelectorAll('.selected');
-                        for (let i = 0; i < allSelectedCells.length; i++) {
-                          const selCell = allSelectedCells[i];
-                          if (selCell !== editingCell) {
-                            selCell.classList.remove("selected");
-                            selCell.removeAttribute("data-selection-edge");
-                            selectedCells.delete(selCell);
-                          }
-                        }
-                        
-                        // Add clicked cell to selection in one operation
-                        if (cell !== editingCell) {
-                          cell.classList.add("selected");
-                          selectedCells.add(cell);
-                          updateHeaderHighlightsFromSelection();
-                        }
-                      }
                     }
                     
-                    e.preventDefault();
-                    return;
+                    // Update cell range pill
+                    updateCellRangePill();
                   }
-
-                  isSelecting = true;
-                  selectionStart = cell;
-                  selectCell(cell);
-                  e.preventDefault();
-                });
-
-                cell.addEventListener("mouseenter", (e) => {
-                  if (isSelecting && selectionStart) {
-                    // Mark as drag start on first mouseenter
-                    if (!isDragStart) {
-                      isDragStart = true;
-                    }
-                    
-                    // Handle ready mode selection
-                    if (currentMode === MODES.READY && !isSelectingCellForFormula) {
-                    selectRange(selectionStart, cell);
-                      return;
-                    }
-                    
-                    // Handle edit mode selection
-                    if (isSelectingCellForFormula && (currentMode === MODES.EDIT || currentMode === MODES.ENTER)) {
-                      // In edit mode, handle range reference
-                      const editingCell = window.selectedCell;
-                      if (editingCell && cell !== selectionStart && cell !== editingCell) {
-                        const clickedRow = parseInt(cell.getAttribute("data-row"));
-                        const clickedCol = parseInt(cell.getAttribute("data-col"));
-                        const cellRefText = addressToCellRef(clickedRow, clickedCol);
-                        
-                        const currentEditor = window.monacoEditor || editor;
-                        if (!currentEditor || !lastSelectedCellRefPosition) {
-                          return;
-                        }
-                        
-                        const model = currentEditor.getModel();
-                        if (!model) {
-                          return;
-                        }
-                        
-                        // Insert colon if not already inserted
-                        if (rangeStartCellRefPosition && rangeEndCellRefPosition === null) {
-                          const { lineNumber, endColumn } = rangeStartCellRefPosition;
-                          const refEndColumn = endColumn + 1; // End of cell reference + 1
-                          
-                          const editRange = new monaco.Range(lineNumber, refEndColumn, lineNumber, refEndColumn);
-                          window.isProgrammaticCursorChange = true;
-                          currentEditor.executeEdits('insert-colon', [{
-                            range: editRange,
-                            text: ':'
-                          }]);
-                          Promise.resolve().then(() => {
-                            // Track the position after colon
-                            const afterColonColumn = refEndColumn + 1;
-                            rangeEndCellRefPosition = {
-                              lineNumber: lineNumber,
-                              columnNumber: afterColonColumn,
-                              endColumn: afterColonColumn
-                            };
-                            window.isProgrammaticCursorChange = false;
-                            
-                            // Immediately update end cell reference after colon is inserted
-                            updateEndCellReference();
-                          });
-                        } else {
-                          // Continuously update end cell reference while dragging
-                          updateEndCellReference();
-                        }
-                        
-                        function updateEndCellReference() {
-                          if (!rangeStartCellRefPosition) return;
-                          
-                          const { lineNumber, endColumn } = rangeStartCellRefPosition;
-                          const colonColumn = endColumn + 1;
-                          const afterColonColumn = colonColumn + 1;
-                          
-                          // Get the current line text to check for colon and what's after it
-                          const fullText = model.getValue();
-                          const lines = fullText.split('\n');
-                          const line = lines[lineNumber - 1] || '';
-                          
-                          // Check if colon exists at the expected position
-                          const colonIndex = colonColumn - 1; // Convert to 0-indexed
-                          const hasColon = line.charAt(colonIndex) === ':';
-                          
-                          if (!hasColon) {
-                            // Colon not inserted yet, skip
-                            return;
-                          }
-                          
-                          // Get text after the colon
-                          const textAfterColon = line.substring(afterColonColumn - 1);
-                          
-                          // Find the first cell reference pattern after the colon
-                          const match = textAfterColon.match(/^([A-Z]+\d+)/);
-                          
-                          if (match) {
-                            // There's a cell reference after colon, replace it
-                            const replaceStart = afterColonColumn;
-                            const replaceEnd = afterColonColumn + match[1].length;
-                            const editRange = new monaco.Range(lineNumber, replaceStart, lineNumber, replaceEnd);
-                            
-                            window.isProgrammaticCursorChange = true;
-                            currentEditor.executeEdits('update-range-end', [{
-                              range: editRange,
-                              text: cellRefText
-                            }]);
-                            Promise.resolve().then(() => {
-                              // During drag, only update rangeEndCellRefPosition
-                              // Keep rangeStartCellRefPosition pointing to just the start cell (A1) so we can find "A1:" during drag
-                              const newEndColumn = afterColonColumn + cellRefText.length;
-                              rangeEndCellRefPosition = {
-                                lineNumber: lineNumber,
-                                columnNumber: afterColonColumn,
-                                endColumn: newEndColumn
-                              };
-                              // Don't update rangeStartCellRefPosition.endColumn during drag - it should stay at the end of "A1"
-                              window.isProgrammaticCursorChange = false;
-                            });
-                          } else {
-                            // No cell reference found, insert new one after colon
-                            const editRange = new monaco.Range(lineNumber, afterColonColumn, lineNumber, afterColonColumn);
-                            
-                            window.isProgrammaticCursorChange = true;
-                            currentEditor.executeEdits('insert-range-end', [{
-                              range: editRange,
-                              text: cellRefText
-                            }]);
-                            Promise.resolve().then(() => {
-                              // During drag, only update rangeEndCellRefPosition
-                              // Keep rangeStartCellRefPosition pointing to just the start cell (A1) so we can find "A1:" during drag
-                              const newEndColumn = afterColonColumn + cellRefText.length;
-                              rangeEndCellRefPosition = {
-                                lineNumber: lineNumber,
-                                columnNumber: afterColonColumn,
-                                endColumn: newEndColumn
-                              };
-                              // Don't update rangeStartCellRefPosition.endColumn during drag - it should stay at the end of "A1"
-                              window.isProgrammaticCursorChange = false;
-                            });
-                          }
-                        }
-                        
-                        // Update selection to show range (preserve anchor cell)
-                        const startRow = parseInt(selectionStart.getAttribute("data-row"));
-                        const startCol = parseInt(selectionStart.getAttribute("data-col"));
-                        const clickedRowNum = parseInt(cell.getAttribute("data-row"));
-                        const clickedColNum = parseInt(cell.getAttribute("data-col"));
-                        
-                        const minRow = Math.min(startRow, clickedRowNum);
-                        const maxRow = Math.max(startRow, clickedRowNum);
-                        const minCol = Math.min(startCol, clickedColNum);
-                        const maxCol = Math.max(startCol, clickedColNum);
-                        
-                        // Clear previous selection except anchor - batched DOM updates
-                        const allSelectedCells = document.querySelectorAll('.selected');
-                        for (let i = 0; i < allSelectedCells.length; i++) {
-                          const selCell = allSelectedCells[i];
-                          if (selCell !== editingCell) {
-                            selCell.classList.remove("selected");
-                            selCell.removeAttribute("data-selection-edge");
-                            selectedCells.delete(selCell);
-                          }
-                        }
-                        
-                        // Add range cells (anchor is already selected) - batch operation
-                        const cellsToAdd = [];
-                        for (let r = minRow; r <= maxRow; r++) {
-                          for (let c = minCol; c <= maxCol; c++) {
-                            const rangeCell = gridBody.querySelector(`tr[data-row="${r}"] td[data-col="${c}"]`);
-                            if (rangeCell && rangeCell !== editingCell) {
-                              // Skip row headers (first column)
-                              const isRowHeader = rangeCell === rangeCell.parentElement.querySelector("td:first-child");
-                              if (!isRowHeader && !rangeCell.classList.contains("selected")) {
-                                cellsToAdd.push(rangeCell);
-                              }
-                            }
-                          }
-                        }
-                        
-                        // Batch add all cells at once
-                        for (let i = 0; i < cellsToAdd.length; i++) {
-                          const rangeCell = cellsToAdd[i];
-                          rangeCell.classList.add("selected");
-                          selectedCells.add(rangeCell);
-                        }
-                        
-                        // Don't show purple border - code editor will draw border automatically
-                        // Only show background colors on selected cells
-                        clearEditModeRangeHighlight();
-                        
-                        // Anchor cell should never change - don't modify its classes or styling
-                        // Just ensure it's still tracked in selectedCells
-                        if (!selectedCells.has(editingCell)) {
-                          selectedCells.add(editingCell);
-                        }
-                        
-                        updateHeaderHighlightsFromSelection();
-                      }
-                    }
+                }
+              },
+              onDoubleClick: (event, coords, TD) => {
+                // Handle Handsontable double-click event
+                if (TD && coords) {
+                  const body = handsontableController.getBodyElement();
+                  if (!body) return;
+                  const row = coords[0];
+                  const col = coords[1];
+                  const cell = body.querySelector(`td[data-row="${row}"][data-col="${col}"]`);
+                  if (cell) {
+                    enterEditMode(cell);
                   }
-                });
-
-                // Single click handler (when not dragging) - selection mode
-                cell.addEventListener("click", (e) => {
-                  // Edit mode exit is handled in mousedown handler before selectCell updates the editor
-                  // By the time click fires, we're no longer in edit mode, so this check should not execute
-                  if (currentMode === MODES.EDIT || currentMode === MODES.ENTER) {
-                    // This should not happen since mousedown already handled edit mode exit
-                    // But if it does, just return to avoid duplicate handling
-                    return;
-                  }
-                  
-                  if (currentMode !== MODES.READY) {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    return;
-                  }
-                  if (isSelecting) {
-                    return;
-                  }
-                  if (e.detail > 1) {
-                    return;
-                  }
-                  enterSelectionModeAndSelectCell(cell);
-                });
-
-                // Double click handler - edit mode
-                cell.addEventListener("dblclick", (e) => {
-                  if (currentMode !== MODES.READY) {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    return;
-                  }
-                  e.preventDefault();
-                  e.stopPropagation();
-                  e.stopImmediatePropagation();
-                  enterEditMode(cell);
-                });
-
-                rowElement.appendChild(cell);
+                }
+              },
+              onBeforeKeyDown: (event) => {
+                // Handle keyboard navigation and editing
+                // Let existing keyboard handlers take precedence
+                // Return false to prevent Handsontable's default behavior if needed
+                // For now, let it pass through to existing handlers
+                return true;
               }
+            });
 
-              fragment.appendChild(rowElement);
+            // Update references to use Handsontable's DOM
+            gridBody = handsontableController.getBodyElement();
+            gridHeaderElement = handsontableController.getHeaderElement();
+            rowHeaderElement = handsontableController.getRowHeaderElement();
+
+            // Store Handsontable instance globally for access elsewhere
+            window.handsontableInstance = handsontableController.hot;
+
+            // Initialize HyperFormula adapter for syncing data
+            if (window.hf && handsontableController) {
+              window.hyperFormulaAdapter = createHyperFormulaAdapter({
+                hfInstance: window.hf,
+                handsontableController: handsontableController,
+                sheetId: 0
+              });
+              console.log("HyperFormula adapter initialized");
             }
 
-            gridBody.appendChild(fragment);
+            // Update height after a brief delay to ensure container is laid out
+            requestAnimationFrame(() => {
+              if (handsontableController.updateHeight) {
+                handsontableController.updateHeight();
+              }
+            });
+
+            console.log("Handsontable grid created successfully");
           }
+
+          // Old DOM grid building code removed - now using Handsontable
+          // The cell creation loop and event handlers are now handled by Handsontable's renderer
+          // via the onCellRender callback in createHandsontableGrid
 
         initResizablePanes();
 
@@ -8438,7 +7804,6 @@ export async function initializeApp() {
               } else {
                 pane.style.height = `${expandedHeight}px`;
               }
-
               // After the pane height settles, relayout Monaco so it fills the new space
               requestAnimationFrame(() => {
                 if (window.monacoEditor && typeof window.monacoEditor.layout === 'function') {
@@ -8460,10 +7825,10 @@ export async function initializeApp() {
               const pane = header.closest('.sliding-pane');
               if (pane) {
                 pane.classList.toggle('collapsed');
-                  updatePaneHeight(pane);
-                  if (header.dataset.pane === 'result' && typeof window.updateResultHeaderValue === "function") {
-                    window.updateResultHeaderValue();
-                  }
+                updatePaneHeight(pane);
+                if (header.dataset.pane === 'result' && typeof window.updateResultHeaderValue === "function") {
+                  window.updateResultHeaderValue();
+                }
               }
             });
           });
@@ -8494,142 +7859,30 @@ export async function initializeApp() {
                 if (currentText) {
                   // Preserve comments while processing
                   const commentPlaceholders = [];
+                  let textWithPlaceholders = currentText;
                   let placeholderIndex = 0;
-                  
-                  // Replace block comments with placeholders
-                  let processed = currentText.replace(/\/\*[\s\S]*?\*\//g, (match) => {
-                    const placeholder = `__COMMENT_BLOCK_${placeholderIndex}__`;
-                    commentPlaceholders.push({ placeholder, content: match });
-                    placeholderIndex++;
-                    return placeholder;
-                  });
-                  
-                  // Replace line comments with placeholders
-                  processed = processed.replace(/\/\/[^\r\n]*(?:\r\n|\r|\n|$)/g, (match) => {
-                    const placeholder = `__COMMENT_LINE_${placeholderIndex}__`;
-                    commentPlaceholders.push({ placeholder, content: match });
-                    placeholderIndex++;
-                    return placeholder;
-                  });
-                  
-                  // Remove existing line breaks and normalize whitespace (but keep placeholders intact)
-                  let formatted = processed.replace(/[\r\n]+/g, ' ').replace(/[ \t]+/g, ' ').trim();
-                  
-                  let result = '';
-                  let indentLevel = 0;
-                  const indentSize = 4;
-                  
-                  let i = 0;
-                  while (i < formatted.length) {
-                    // Check if we're at the start of a placeholder
-                    let foundPlaceholder = false;
-                    for (const { placeholder, content } of commentPlaceholders) {
-                      if (formatted.substring(i, i + placeholder.length) === placeholder) {
-                        // Output comment exactly as-is (including its newline)
-                        result += content;
-                        i += placeholder.length;
-                        foundPlaceholder = true;
-                        break;
-                      }
-                    }
-                    
-                    if (foundPlaceholder) {
-                      continue;
-                    }
-                    
-                    const char = formatted[i];
-                    
-                    if (char === '(') {
-                      result += char;
-                      indentLevel++;
-                      result += '\n' + ' '.repeat(indentLevel * indentSize);
-                    } else if (char === ',') {
-                      result += char;
-                      result += '\n' + ' '.repeat(indentLevel * indentSize);
-                    } else if (char === ')') {
-                      indentLevel--;
-                      if (indentLevel < 0) indentLevel = 0;
-                      result += '\n' + ' '.repeat(indentLevel * indentSize);
-                      result += char;
-                    } else {
-                      result += char;
-                    }
-                    
-                    i++;
-                  }
-                  
-                  currentEditor.setValue(result);
-                  
-                  const lineCount = currentEditor.getModel().getLineCount();
-                  const lastLine = currentEditor.getModel().getLineContent(lineCount);
-                  currentEditor.setPosition({ lineNumber: lineCount, column: lastLine.length + 1 });
-                }
-              }
-            });
-          }
 
-          // Collapse errors button handler
-          const collapseErrorsBtn = document.getElementById('collapseErrorsBtn');
-          if (collapseErrorsBtn) {
-            collapseErrorsBtn.addEventListener('click', () => {
-              const currentEditor = window.monacoEditor || editor;
-              if (currentEditor && typeof currentEditor.getValue === 'function' && typeof currentEditor.setValue === 'function') {
-                const currentText = currentEditor.getValue();
-                if (currentText) {
-                  // Preserve comments while processing - extract them first
-                  const commentPlaceholders = [];
-                  let placeholderIndex = 0;
-                  
-                  // Replace block comments with placeholders (preserve exactly as-is)
-                  let processed = currentText.replace(/\/\*[\s\S]*?\*\//g, (match) => {
-                    const placeholder = `__COMMENT_BLOCK_${placeholderIndex}__`;
-                    commentPlaceholders.push({ placeholder, content: match });
-                    placeholderIndex++;
+                  // Replace comments with placeholders
+                  textWithPlaceholders = textWithPlaceholders.replace(/\/\/.*$/gm, (match) => {
+                    const placeholder = `__COMMENT_${placeholderIndex++}__`;
+                    commentPlaceholders.push({ placeholder, original: match });
                     return placeholder;
                   });
-                  
-                  // Replace line comments with placeholders (capture comment + newline if present)
-                  processed = processed.replace(/\/\/[^\r\n]*(?:\r\n|\r|\n|$)/g, (match) => {
-                    const placeholder = `__COMMENT_LINE_${placeholderIndex}__`;
-                    commentPlaceholders.push({ placeholder, content: match });
-                    placeholderIndex++;
-                    return placeholder;
+
+                  // Tidy the formula (remove extra spaces, normalize)
+                  const tidied = textWithPlaceholders
+                    .split('\n')
+                    .map(line => line.trim())
+                    .filter(line => line.length > 0)
+                    .join('\n');
+
+                  // Restore comments
+                  let finalText = tidied;
+                  commentPlaceholders.forEach(({ placeholder, original }) => {
+                    finalText = finalText.replace(placeholder, original);
                   });
-                  
-                  // Now process the non-comment text
-                  // Remove all line breaks (but placeholders will preserve comment newlines)
-                  let collapsed = processed.replace(/[\r\n]+/g, ' ');
-                  
-                  // Normalize whitespace: replace multiple spaces/tabs with single space
-                  collapsed = collapsed.replace(/[ \t]+/g, ' ');
-                  
-                  // Remove spaces before commas
-                  collapsed = collapsed.replace(/\s+,/g, ',');
-                  
-                  // Remove spaces after opening parentheses
-                  collapsed = collapsed.replace(/\(\s+/g, '(');
-                  
-                  // Remove spaces before closing parentheses
-                  collapsed = collapsed.replace(/\s+\)/g, ')');
-                  
-                  // Ensure space after commas: ",A" -> ", A" (but don't add if space already exists)
-                  collapsed = collapsed.replace(/,([^\s])/g, ', $1');
-                  
-                  // Restore comments exactly as they were (including their newlines)
-                  commentPlaceholders.forEach(({ placeholder, content }) => {
-                    collapsed = collapsed.replace(placeholder, content);
-                  });
-                  
-                  // Trim the result
-                  collapsed = collapsed.trim();
-                  
-                  // Set the collapsed text back to the editor
-                  currentEditor.setValue(collapsed);
-                  
-                  // Move cursor to end
-                  const lineCount = currentEditor.getModel().getLineCount();
-                  const lastLine = currentEditor.getModel().getLineContent(lineCount);
-                  currentEditor.setPosition({ lineNumber: lineCount, column: lastLine.length + 1 });
+
+                  currentEditor.setValue(finalText);
                 }
               }
             });
@@ -8655,9 +7908,8 @@ export async function initializeApp() {
           if (typeof window.updateResultHeaderValue === "function") {
             window.updateResultHeaderValue();
           }
+
         } catch (error) {
           console.error("Error initializing app:", error);
         }
-}
-
-
+      }
