@@ -48,8 +48,10 @@ function activate(context) {
         HarborFormulasPanel_1.HarborFormulasPanel.createOrShow(context.extensionUri);
     });
     context.subscriptions.push(disposable);
-    // Auto-open on activation
-    HarborFormulasPanel_1.HarborFormulasPanel.createOrShow(context.extensionUri);
+    // Auto-open on activation - use setTimeout to ensure VS Code is ready
+    setTimeout(() => {
+        HarborFormulasPanel_1.HarborFormulasPanel.createOrShow(context.extensionUri);
+    }, 100);
 }
 /**
  * This method is called when your extension is deactivated.

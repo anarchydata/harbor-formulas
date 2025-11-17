@@ -18,8 +18,10 @@ export function activate(context: vscode.ExtensionContext) {
 
   context.subscriptions.push(disposable);
 
-  // Auto-open on activation
-  HarborFormulasPanel.createOrShow(context.extensionUri);
+  // Auto-open on activation - use setTimeout to ensure VS Code is ready
+  setTimeout(() => {
+    HarborFormulasPanel.createOrShow(context.extensionUri);
+  }, 100);
 }
 
 /**
