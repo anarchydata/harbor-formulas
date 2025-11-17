@@ -8,6 +8,14 @@
     "preview": "vite preview"
   },
   "devDependencies": {
+    "@types/handsontable": "^0.31.2",
+    "@types/node": "^24.10.1",
+    "@typescript-eslint/eslint-plugin": "^8.47.0",
+    "@typescript-eslint/parser": "^8.47.0",
+    "eslint": "^9.39.1",
+    "eslint-config-prettier": "^10.1.8",
+    "prettier": "^3.6.2",
+    "typescript": "^5.9.3",
     "vite": "^7.2.2",
     "vite-plugin-monaco-editor": "^1.1.0"
   },
