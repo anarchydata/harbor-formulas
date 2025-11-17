@@ -1836,10 +1836,19 @@ td.fill-preview .grid-cell-display {
 .dependency-first-cell {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 6px;
   font-size: 10px;
   color: var(--text-muted);
   flex-wrap: wrap;
+}
+
+.dependency-left-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
 }
 
 .dependency-first-address {
@@ -1852,6 +1861,15 @@ td.fill-preview .grid-cell-display {
   color: #e0e0e0;
   white-space: pre-wrap;
   word-break: break-word;
+}
+
+.dependency-position {
+  font-family: "Consolas", "Courier New", monospace;
+  font-size: 9px;
+  color: var(--text-muted);
+  opacity: 0.7;
+  white-space: nowrap;
+  margin-left: auto;
 }
 
 .dependency-value.is-formula {
