@@ -1,27 +1,19 @@
 {
   "name": "harbor-formulas",
   "version": "1.0.0",
-  "type": "module",
+  "private": true,
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
   "scripts": {
-    "dev": "vite",
-    "build": "vite build",
-    "preview": "vite preview"
+    "build": "npm run build --workspaces",
+    "build:core": "npm run build --workspace=@harbor/core",
+    "build:vscode": "npm run compile --workspace=apps/harbor-vscode",
+    "watch:core": "npm run watch --workspace=@harbor/core",
+    "watch:vscode": "npm run watch --workspace=apps/harbor-vscode"
   },
   "devDependencies": {
-    "@types/handsontable": "^0.31.2",
-    "@types/node": "^24.10.1",
-    "@typescript-eslint/eslint-plugin": "^8.47.0",
-    "@typescript-eslint/parser": "^8.47.0",
-    "eslint": "^9.39.1",
-    "eslint-config-prettier": "^10.1.8",
-    "prettier": "^3.6.2",
-    "typescript": "^5.9.3",
-    "vite": "^7.2.2",
-    "vite-plugin-monaco-editor": "^1.1.0"
-  },
-  "dependencies": {
-    "handsontable": "^16.1.1",
-    "hyperformula": "^3.1.0",
-    "monaco-editor": "^0.53.0"
+    "typescript": "^5.0.0"
   }
 }
