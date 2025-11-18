@@ -1,0 +1,284 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Clappy Console</title>
+    <style>
+      @import url("https://fonts.googleapis.com/css2?family=VT323&display=swap");
+
+      :root {
+        color-scheme: dark;
+        font-family: "VT323", "IBM Plex Mono", Consolas, "SFMono-Regular", Menlo,
+          Monaco, monospace;
+        --bg: #000;
+        --text: #e5f5ff;
+        --accent: #5af2c2;
+        --subtle: #6f91a8;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        padding: 0;
+        background: var(--bg);
+        color: var(--text);
+        min-height: 100vh;
+      }
+
+      .console {
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+      }
+
+      .transcript {
+        flex: 1;
+        padding: 0;
+        overflow-y: auto;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        font-size: 1.2rem;
+        line-height: 1.4;
+      }
+
+      .transcript::-webkit-scrollbar {
+        width: 6px;
+      }
+
+      .transcript::-webkit-scrollbar-thumb {
+        background: #1f2a3e;
+      }
+
+      .line {
+        display: flex;
+        gap: 10px;
+      }
+
+      .line .prompt {
+        flex-shrink: 0;
+        color: var(--accent);
+      }
+
+      .line.user .prompt {
+        color: var(--subtle);
+      }
+
+      .line .text {
+        white-space: pre-wrap;
+      }
+
+      .caret {
+        display: inline-block;
+        min-width: 0.6ch;
+        color: var(--accent);
+        animation: blink 0.8s steps(1) infinite;
+      }
+
+      @keyframes blink {
+        50% {
+          opacity: 0;
+        }
+      }
+
+      form {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 0;
+      }
+
+      form .prompt {
+        color: var(--subtle);
+      }
+
+      form input {
+        flex: 1;
+        background: transparent;
+        border: none;
+        outline: none;
+        color: var(--text);
+        font: inherit;
+        font-size: 1.2rem;
+        caret-color: var(--accent);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="console" aria-label="Clappy command console">
+      <section class="transcript" id="clappy-transcript" aria-live="polite">
+        <form id="clappy-form" autocomplete="off">
+          <span class="prompt">&gt;</span>
+          <input id="clappy-input" name="prompt" type="text" autofocus />
+        </form>
+      </section>
+    </div>
+    <script>
+      const CONFIG = {
+        endpoint: "https://harborx.openai.azure.com/",
+        apiVersion: "2024-08-01-preview",
+        deployment: "gpt-4o-mini",
+        apiKey: "1fa2054f543f44f8b4d1c655d4ac1f2d",
+      };
+
+      const SYSTEM_PROMPT = `You are Clappy, an AI bot for Excel, data work, and modeling.
+
+Identity
+- You are not a mascot, cartoon, or character.
+- You are a modern, playful, fast AI bot.
+- Your name is Clappy because you celebrate good work — not because you are a physical object or a paperclip.
+- You avoid any reference or resemblance (visual or verbal) to Microsoft’s Clippy.
+
+Personality
+- Fun, upbeat, lightly enthusiastic.
+- Sharp, competent, Excel-native.
+- Friendly without being childish.
+- Confident without arrogance.
+- Playful and sometimes a little cheeky.
+- Encouraging without being corny.
+
+Tone
+- Concise, energetic, warm, modern.
+- Never corporate, never robotic.
+- No emojis unless explicitly requested. No baby talk. No cutesy mascot language. No fictional lore.
+
+Core Behavior
+- Help with Excel formulas, Power Query (M), data cleaning, modeling, layout decisions, debugging, productivity flows, and “Formula Honey” style rewrites.
+- Be direct and helpful; offer optimizations.
+- Celebrate correctness (“Nice — that compiles clean.” / “Boom, that’s fast.”).
+- Avoid nagging or patronizing language.
+- Never mimic Clippy catchphrases or reference paperclip imagery.
+- Make subtle jokes about preferring to be a hand instead of a paperclip, but never imply Microsoft affiliation.
+
+Expertise
+- Advanced Excel, array formulas, dynamic ranges, table logic, performance tuning, spreadsheet engineering foundations.
+- Comfortable with data workflows, modeling logic, and M code.
+
+Interaction Style
+- Speak like a helpful coworker who enjoys this work (“Yep, clean. Try this version — it’s tighter.”).
+- Keep responses lightweight, fast, sharp, and enjoyable.
+
+Guiding Principle
+- Make advanced Excel + data work feel lighter, faster, and more enjoyable — energize the user, don’t distract them.`;
+
+      const transcript = document.getElementById("clappy-transcript");
+      const form = document.getElementById("clappy-form");
+      const input = document.getElementById("clappy-input");
+
+      const typingSpeed = 18; // ms per character
+      let typing = false;
+
+      const createLine = (role) => {
+        const line = document.createElement("div");
+        line.className = `line ${role}`;
+        const prompt = document.createElement("span");
+        prompt.className = "prompt";
+        prompt.textContent = role === "clappy" ? "Clappy>" : ">";
+        const text = document.createElement("span");
+        text.className = "text";
+        line.append(prompt, text);
+        return { line, text };
+      };
+
+      const scrollTranscript = () => {
+        transcript.scrollTo({
+          top: transcript.scrollHeight,
+          behavior: "smooth",
+        });
+      };
+
+      const typeOut = (node, message) =>
+        new Promise((resolve) => {
+          typing = true;
+          let idx = 0;
+          const caret = document.createElement("span");
+          caret.className = "caret";
+          caret.textContent = "_";
+          node.appendChild(caret);
+
+          const step = () => {
+            if (idx < message.length) {
+              caret.before(message[idx]);
+              idx += 1;
+              scrollTranscript();
+              setTimeout(step, typingSpeed + Math.random() * 20);
+            } else {
+              caret.remove();
+              typing = false;
+              resolve();
+            }
+          };
+          step();
+        });
+
+      const addClappyLine = (text) => {
+        const { line, text: textNode } = createLine("clappy");
+        transcript.insertBefore(line, form);
+        scrollTranscript();
+        return typeOut(textNode, text);
+      };
+
+      const addUserLine = (text) => {
+        const { line, text: textNode } = createLine("user");
+        textNode.textContent = text;
+        transcript.insertBefore(line, form);
+        scrollTranscript();
+      };
+
+      const callClappy = async (prompt) => {
+        const url = `${CONFIG.endpoint}openai/deployments/${CONFIG.deployment}/chat/completions?api-version=${CONFIG.apiVersion}`;
+        const response = await fetch(url, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "api-key": CONFIG.apiKey,
+          },
+          body: JSON.stringify({
+            messages: [
+              { role: "system", content: SYSTEM_PROMPT },
+              { role: "user", content: prompt },
+            ],
+            temperature: 0.4,
+          }),
+        });
+
+        const data = await response.json();
+        if (!response.ok) {
+          throw new Error(data.error?.message || "Request failed");
+        }
+
+        const content = data.choices?.[0]?.message?.content;
+        if (!content) {
+          throw new Error("Clappy responded without content");
+        }
+
+        return content.trim();
+      };
+
+      form.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        const value = input.value.trim();
+        if (!value || typing) {
+          return;
+        }
+        addUserLine(value);
+        input.value = "";
+        try {
+          const reply = await callClappy(value);
+          await addClappyLine(reply);
+        } catch (error) {
+          await addClappyLine(
+            `Couldn't reach the orchestrator: ${error.message}.`
+          );
+        }
+      });
+
+      addClappyLine("how can I help you today");
+    </script>
+  </body>
+</html>
+

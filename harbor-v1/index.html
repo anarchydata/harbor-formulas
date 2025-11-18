@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Harbor Formulas</title>
+  </head>
+  <body>
+    <div class="workbench">
+      <!-- Left Sidebar -->
+      <div class="sidebar">
+        <div class="sidebar-icon-bar">
+          <div class="sidebar-icon active" title="Explorer">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+              <path d="M2 2h12v12H2V2zm1 1v10h10V3H3zm1 1h8v1H4V4zm0 2h8v1H4V6zm0 2h8v1H4V8zm0 2h6v1H4v-1z"/>
+            </svg>
+          </div>
+          <div class="sidebar-icon" title="Search">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+              <path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001c.03.04 062.078.098.115.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1.007 1.007 0 0 0-.115-.1zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0z"/>
+            </svg>
+          </div>
+          <button
+            class="sidebar-icon sidebar-collapse-toggle"
+            id="sidebarCollapseToggle"
+            type="button"
+            aria-expanded="true"
+            title="Collapse File Explorer"
+          >
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M10 2L6 8L10 14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+            </svg>
+          </button>
+        </div>
+        <div class="file-tree">
+          <div class="folder-header" id="projectFolder">
+            <span class="folder-chevron">▼</span>
+            <span>Project Folder</span>
+          </div>
+          <div class="folder-content" id="projectFolderContent">
+            <div class="file-item selected">
+              <span class="file-icon excel">X</span>
+              <span>financial models.xlsx</span>
+            </div>
+            <div class="file-item">
+              <span class="file-icon excel">X</span>
+              <span>Budget (1).xlsx</span>
+            </div>
+            <div class="file-item">
+              <span class="file-icon excel">X</span>
+              <span>cashflow_vfinal_final.xlsx</span>
+            </div>
+            <div class="file-item">
+              <span class="file-icon excel">X</span>
+              <span>OpPlan-2030.xlsx</span>
+            </div>
+            <div class="file-item">
+              <span class="file-icon excel">X</span>
+              <span>earnings_sim.xlsx</span>
+            </div>
+            <div class="file-item">
+              <span class="file-icon excel">X</span>
+              <span>macro-sanity.xlsx</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Resizer -->
+      <div class="resizer" id="leftResizer"></div>
+
+      <!-- Middle Section -->
+      <div class="middle-section">
+        <!-- Grid Section (60%) -->
+        <div class="grid-container">
+          <div class="grid-header">
+            <div class="grid-name-dropdown-wrapper">
+              <select class="grid-name-dropdown" id="gridNameDropdown" required>
+                <option value="" selected>New name....</option>
+              </select>
+            </div>
+          </div>
+          <div class="grid-wrapper">
+            <div class="grid-wrapper-inner" id="gridWrapperInner">
+              <div class="handsontable-root" id="handsontableRoot" aria-label="Spreadsheet grid"></div>
+              <div class="selection-overlay" id="selectionOverlay">
+                <div class="selection-border-handle selection-border-handle-top" data-edge="top"></div>
+                <div class="selection-border-handle selection-border-handle-right" data-edge="right"></div>
+                <div class="selection-border-handle selection-border-handle-bottom" data-edge="bottom"></div>
+                <div class="selection-border-handle selection-border-handle-left" data-edge="left"></div>
+                <div class="fill-handle" id="fillHandle"></div>
+              </div>
+            </div>
+            <div class="custom-scrollbar-vertical" id="customScrollbarV"></div>
+            <div class="custom-scrollbar-horizontal" id="customScrollbarH"></div>
+          </div>
+          <div class="tabs-bar" id="sheetTabsBar">
+            <button class="tab active" type="button" data-sheet-id="0" data-sheet-name="Sheet1">
+              Sheet1
+            </button>
+            <button class="tab tab-add" type="button" aria-label="Add sheet">+</button>
+          </div>
+        </div>
+
+        <!-- Resizer -->
+        <div class="resizer horizontal" id="middleResizer"></div>
+
+        <!-- Chat Section (40%) -->
+        <div class="chat-container" id="chatContainer">
+          <div class="chat-toolbar">
+            <button
+              class="chat-collapse-btn"
+              id="chatCollapseToggle"
+              type="button"
+              aria-expanded="true"
+              aria-controls="clappyConsole"
+              title="Collapse chat panel"
+              aria-label="Collapse chat panel"
+            >
+              <svg
+                class="chat-chevron"
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                role="presentation"
+                aria-hidden="true"
+              >
+                <path
+                  d="M5.47 8.97a.75.75 0 0 1 1.06 0L12 14.44l5.47-5.47a.75.75 0 0 1 1.06 1.06l-6 6a.75.75 0 0 1-1.06 0l-6-6a.75.75 0 0 1 0-1.06Z"
+                  fill="currentColor"
+                />
+              </svg>
+            </button>
+          </div>
+          <div class="clappy-console" id="clappyConsole" aria-label="Clappy command console">
+            <section class="clappy-transcript" id="clappyTranscript" aria-live="polite">
+              <form class="clappy-form" id="clappyForm" autocomplete="off">
+                <span class="clappy-prompt">&gt;</span>
+                <input id="clappyInput" name="prompt" type="text" autocomplete="off" />
+              </form>
+            </section>
+          </div>
+        </div>
+      </div>
+
+      <!-- Resizer -->
+      <div class="resizer" id="rightResizer"></div>
+
+      <!-- Right Side - Formula Editor -->
+      <div class="formula-editor" id="formulaEditor" style="width: 400px; min-width: 200px; flex: 0 0 400px; display: flex;">
+        <div class="editor-header">
+          <span class="formula-equals">=</span>
+        </div>
+        <div class="editor-wrapper">
+          <div class="editor-shell" id="formulaEditorInner">
+            <div id="monacoEditor" style="width: 100%; height: 100%;"></div>
+          </div>
+        </div>
+        <div
+          class="editor-status-bar"
+          id="editorStatusBar"
+          role="status"
+          aria-live="polite"
+          aria-atomic="true"
+        >
+          <span class="status-item status-selection">
+            <span class="cell-range-pill" id="cellRangePill">
+              <span class="cell-mode-prefix" id="cellModePrefix">🔎&#xFE0E; Selecting</span>
+              <span class="cell-range-chip" id="cellRangeChip">(A1)</span>
+            </span>
+          </span>
+          <button
+            class="status-collapse-btn"
+            id="wordWrapBtn"
+            type="button"
+            title="Word wrap"
+            aria-label="Word wrap"
+          >
+            <svg class="collapse-icon" width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M3 6L21 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+              <path d="M3 12L18 12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+              <path d="M3 18L21 18" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+              <path d="M18 10L21 12L18 14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+            </svg>
+          </button>
+          <button
+            class="status-collapse-btn status-tidy-btn"
+            id="broomBtn"
+            type="button"
+            title="Tidy"
+            aria-label="Tidy"
+          >
+            <svg class="collapse-icon" width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M12 2L12 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+              <path d="M12 18L12 22" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+              <path d="M2 12L6 12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+              <path d="M18 12L22 12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+              <path d="M5.5 5.5L8 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+              <path d="M16 16L18.5 18.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+              <path d="M18.5 5.5L16 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+              <path d="M5.5 18.5L8 16" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+              <path d="M12 8L10 12L12 16L14 12L12 8Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+            </svg>
+          </button>
+          <button
+            class="status-collapse-btn"
+            id="collapseErrorsBtn"
+            type="button"
+            title="Collapse"
+            aria-label="Collapse"
+          >
+            <svg class="collapse-icon" width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M4 4L4 16M1 13L4 16L7 13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+              <path d="M14 4L14 16M11 13L14 16L17 13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+            </svg>
+          </button>
+          <span class="status-item">
+            <span class="status-label">LN</span>
+            <span class="status-value" id="editorStatusLine">--</span>
+          </span>
+          <span class="status-item">
+            <span class="status-label">COL</span>
+            <span class="status-value" id="editorStatusColumn">--</span>
+          </span>
+        </div>
+        <div class="bottom-panes">
+          <div class="sliding-pane result-pane collapsed">
+            <div class="pane-header" data-pane="result">
+              <span class="pane-toggle"></span>
+              <span class="pane-title">RESULT</span>
+              <span class="pane-header-value" id="resultHeaderValue"></span>
+            </div>
+            <div class="pane-content" id="resultContent"></div>
+          </div>
+          <div class="sliding-pane messages-pane collapsed">
+            <div class="pane-header" data-pane="messages">
+              <span class="pane-toggle"></span>
+              <span class="pane-title">MESSAGES</span>
+              <span class="pane-indicators">
+                <span class="error-indicator">
+                  <span class="error-icon">✕&#xFE0E;</span>
+                  <span class="error-count">0</span>
+                </span>
+                <span class="warning-indicator">
+                  <span class="warning-icon">⚠&#xFE0E;</span>
+                  <span class="warning-count">0</span>
+                </span>
+              </span>
+            </div>
+            <div class="pane-content" id="messagesContent"></div>
+          </div>
+          <div class="sliding-pane dependencies-pane collapsed">
+            <div class="pane-header" data-pane="dependencies">
+              <span class="pane-toggle"></span>
+              <span class="pane-title">DEPENDENCIES</span>
+              <span class="pane-count" id="dependenciesCount" aria-label="0 dependencies">0</span>
+            </div>
+            <div class="pane-content" id="dependenciesContent"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <script type="module" src="./app/main.js"></script>
+  </body>
+</html>

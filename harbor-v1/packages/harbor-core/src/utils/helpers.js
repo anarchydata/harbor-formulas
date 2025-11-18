@@ -1,0 +1,365 @@
+/**
+ * Helper function to create snippet template from function signature
+ * This must be defined before it's used in completion providers and Tab handlers
+ */
+export function createFunctionSnippet(func) {
+  const signature = func.signature;
+  const match = signature.match(/^(\w+)\s*\((.*)\)$/);
+  if (!match) {
+    return `${func.name}($1)`;
+  }
+
+  const params = match[2];
+  if (!params || params.trim() === '') {
+    return `${func.name}()`;
+  }
+
+  const paramList = params.split(',').map((p) => p.trim());
+  let placeholderIndex = 1;
+  const snippetParams = paramList.map((param) => {
+    if (param.endsWith('...')) {
+      return `\${${placeholderIndex++}:${param.replace('...', '')}}`;
+    }
+    return `\${${placeholderIndex++}:${param}}`;
+  });
+
+  return `${func.name}(${snippetParams.join(', ')})`;
+}
+
+const DEFAULT_MIN_LINES = 30;
+
+export function ensureSevenLines(value) {
+  const lines = value.split('\n');
+  while (lines.length < DEFAULT_MIN_LINES) {
+    lines.push('');
+  }
+  return lines.slice(0, DEFAULT_MIN_LINES).join('\n');
+}
+
+export function stripComments(formulaText) {
+  if (!formulaText) return formulaText;
+
+  let result = '';
+  let inString = false;
+  let inBlockComment = false;
+  let inInlineComment = false;
+  let escaped = false;
+
+  for (let i = 0; i < formulaText.length; i++) {
+    const char = formulaText[i];
+    const nextChar = i < formulaText.length - 1 ? formulaText[i + 1] : '';
+
+    if (escaped) {
+      escaped = false;
+      if (!inBlockComment && !inInlineComment) {
+        result += char;
+      }
+      continue;
+    }
+
+    if (char === '\\') {
+      escaped = true;
+      if (!inBlockComment && !inInlineComment) {
+        result += char;
+      }
+      continue;
+    }
+
+    if (char === '"' && !inBlockComment && !inInlineComment) {
+      inString = !inString;
+      result += char;
+      continue;
+    }
+
+    if (inString) {
+      result += char;
+      continue;
+    }
+
+    if (!inBlockComment && !inInlineComment && char === '/' && nextChar === '*') {
+      inBlockComment = true;
+      i++;
+      continue;
+    }
+
+    if (inBlockComment && char === '*' && nextChar === '/') {
+      inBlockComment = false;
+      i++;
+      continue;
+    }
+
+    if (!inBlockComment && !inInlineComment && char === '/' && nextChar === '/') {
+      inInlineComment = true;
+      i++;
+      continue;
+    }
+
+    if (char === '\n' && inInlineComment) {
+      inInlineComment = false;
+      result += char;
+      continue;
+    }
+
+    if (!inBlockComment && !inInlineComment) {
+      result += char;
+    }
+  }
+
+  return result.trim();
+}
+
+function getCommentRanges(text) {
+  if (!text) return [];
+
+  const ranges = [];
+  let inString = false;
+  let escaped = false;
+  let inBlockComment = false;
+  let inInlineComment = false;
+  let blockCommentStart = -1;
+  let inlineCommentStart = -1;
+
+  for (let i = 0; i < text.length; i++) {
+    const char = text[i];
+    const nextChar = i < text.length - 1 ? text[i + 1] : '';
+
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+
+    if (char === '\\') {
+      escaped = true;
+      continue;
+    }
+
+    if (!inBlockComment && !inInlineComment && char === '"' && !escaped) {
+      inString = !inString;
+      continue;
+    }
+
+    if (inString) {
+      continue;
+    }
+
+    if (!inBlockComment && !inInlineComment && char === '/' && nextChar === '*') {
+      inBlockComment = true;
+      blockCommentStart = i;
+      i++;
+      continue;
+    }
+
+    if (inBlockComment && char === '*' && nextChar === '/') {
+      ranges.push({ start: blockCommentStart, end: i + 2 });
+      inBlockComment = false;
+      blockCommentStart = -1;
+      i++;
+      continue;
+    }
+
+    if (!inBlockComment && !inInlineComment && char === '/' && nextChar === '/') {
+      inInlineComment = true;
+      inlineCommentStart = i;
+      i++;
+      continue;
+    }
+
+    if (inInlineComment && char === '\n') {
+      ranges.push({ start: inlineCommentStart, end: i });
+      inInlineComment = false;
+      inlineCommentStart = -1;
+    }
+  }
+
+  if (inBlockComment && blockCommentStart !== -1) {
+    ranges.push({ start: blockCommentStart, end: text.length });
+  }
+
+  if (inInlineComment && inlineCommentStart !== -1) {
+    ranges.push({ start: inlineCommentStart, end: text.length });
+  }
+
+  return ranges;
+}
+
+function isIndexInRanges(index, ranges) {
+  if (!Array.isArray(ranges) || ranges.length === 0) return false;
+  for (let i = 0; i < ranges.length; i++) {
+    const range = ranges[i];
+    if (index >= range.start && index < range.end) {
+      return true;
+    }
+  }
+  return false;
+}
+
+export function escapeHtml(text = '') {
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+
+export function colToLetter(col) {
+  let letter = '';
+  let num = col;
+  do {
+    letter = String.fromCharCode(65 + (num % 26)) + letter;
+    num = Math.floor(num / 26) - 1;
+  } while (num >= 0);
+  return letter;
+}
+
+export function letterToCol(letter) {
+  let col = 0;
+  const upper = letter.toUpperCase();
+  for (let i = 0; i < upper.length; i++) {
+    col = col * 26 + (upper.charCodeAt(i) - 64);
+  }
+  return col - 1;
+}
+
+export function cellRefToAddress(cellRef) {
+  if (!cellRef) return null;
+  const match = cellRef.match(/^([A-Z]+)(\d+)$/i);
+  if (!match) return null;
+  const col = letterToCol(match[1]);
+  const row = parseInt(match[2], 10) - 1;
+  if (Number.isNaN(row) || Number.isNaN(col)) return null;
+  return [row, col];
+}
+
+export function addressToCellRef(row, col) {
+  return `${colToLetter(col)}${row + 1}`;
+}
+
+export function isInsideQuotes(text, position) {
+  if (!text) return false;
+  let inDoubleQuotes = false;
+  let escaped = false;
+  const limit = Math.min(position, text.length);
+
+  for (let i = 0; i < limit; i++) {
+    const char = text[i];
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+    if (char === '\\') {
+      escaped = true;
+      continue;
+    }
+    if (char === '"') {
+      inDoubleQuotes = !inDoubleQuotes;
+    }
+  }
+
+  return inDoubleQuotes;
+}
+
+export function detectCellReferences(text) {
+  if (!text) return [];
+
+  const cellRefs = [];
+  const seen = new Set();
+  const commentRanges = getCommentRanges(text);
+
+  const cellPattern = /(?:'[^']+'!)?(\$?[A-Z]+\$?[0-9]+\$?)(?:\s*:\s*(\$?[A-Z]+\$?[0-9]+\$?)?)?/gi;
+  const columnPattern = /(?:'[^']+'!)?(\$?[A-Z]+)\s*:\s*(\$?[A-Z]+)/gi;
+
+  function addMatch(fullMatch, startIndex) {
+    const withoutSheet = fullMatch.includes('!') ? fullMatch.substring(fullMatch.indexOf('!') + 1) : fullMatch;
+    const compactRef = withoutSheet.replace(/\s+/g, '');
+    const hasDigits = /\d/.test(compactRef);
+    const hasColon = compactRef.includes(':');
+    if (!hasDigits && !hasColon) {
+      return;
+    }
+
+    const key = `${startIndex}:${compactRef}`;
+    if (seen.has(key)) {
+      return;
+    }
+    seen.add(key);
+
+    let endIndex = startIndex + fullMatch.length;
+    if (compactRef.endsWith(':')) {
+      const trailingWhitespace = fullMatch.match(/\s+$/);
+      if (trailingWhitespace && trailingWhitespace[0]) {
+        endIndex -= trailingWhitespace[0].length;
+      }
+    }
+
+    cellRefs.push({
+      text: compactRef,
+      start: startIndex,
+      end: endIndex,
+      range: compactRef,
+      fullMatch
+    });
+  }
+
+  let match;
+  while ((match = cellPattern.exec(text)) !== null) {
+    if (isInsideQuotes(text, match.index) || isIndexInRanges(match.index, commentRanges)) {
+      continue;
+    }
+    addMatch(match[0], match.index);
+  }
+
+  while ((match = columnPattern.exec(text)) !== null) {
+    if (isInsideQuotes(text, match.index) || isIndexInRanges(match.index, commentRanges)) {
+      continue;
+    }
+    addMatch(match[0], match.index);
+  }
+
+  return cellRefs;
+}
+
+const CUSTOM_FUNCTIONS = [
+  {
+    name: 'LET',
+    signature: 'LET(name1, value1, calculation_or_name2, ...)',
+    description: 'Assigns names to calculation results for reuse within a formula.'
+  }
+];
+
+export function extendWithCustomFunctions(functions = []) {
+  const merged = Array.isArray(functions) ? [...functions] : [];
+  const seen = new Set(merged.map((f) => f.name?.toUpperCase()).filter(Boolean));
+
+  CUSTOM_FUNCTIONS.forEach((func) => {
+    const upperName = func.name.toUpperCase();
+    if (!seen.has(upperName)) {
+      merged.push(func);
+      seen.add(upperName);
+    }
+  });
+
+  return merged;
+}
+
+/**
+ * Base chip colors used across the experience (excluding pure black).
+ * Organized list so consumers can reference consistent color tokens.
+ */
+export const BASE_CHIP_COLORS = [
+  { name: 'Brick', hex: '#8C3B2A' },
+  { name: 'Orchid', hex: '#9A5FA7' },
+  { name: 'Indigo', hex: '#4B4C97' },
+  { name: 'Harbor Green', hex: '#6B9B62' },
+  { name: 'Citron', hex: '#D7DB8A' },
+  { name: 'Charcoal', hex: '#777777' },
+  { name: 'Fog', hex: '#BEBEBE' },
+  { name: 'Olive Bark', hex: '#68551A' },
+  { name: 'Copper', hex: '#A56C45' },
+  { name: 'Rose', hex: '#C9877C' },
+  { name: 'Lavender', hex: '#8C86C8' },
+  { name: 'Mint', hex: '#B8DCAD' },
+  { name: 'Aqua', hex: '#88C1CB' },
+  { name: 'Slate', hex: '#8F8F8F' },
+  { name: 'Snow', hex: '#FFFFFF' }
+];
+
+
+

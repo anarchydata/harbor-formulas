@@ -1,0 +1,25 @@
+{
+  "hash": "1321cfae",
+  "configHash": "5285ac53",
+  "lockfileHash": "aedadcbd",
+  "browserHash": "dfcebaf9",
+  "optimized": {
+    "handsontable": {
+      "src": "../../node_modules/handsontable/index.mjs",
+      "file": "handsontable.js",
+      "fileHash": "93919dae",
+      "needsInterop": false
+    },
+    "hyperformula": {
+      "src": "../../node_modules/hyperformula/es/index.mjs",
+      "file": "hyperformula.js",
+      "fileHash": "943cf838",
+      "needsInterop": false
+    }
+  },
+  "chunks": {
+    "chunk-E5EEIGMK": {
+      "file": "chunk-E5EEIGMK.js"
+    }
+  }
+}
